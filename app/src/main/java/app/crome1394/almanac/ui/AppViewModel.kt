@@ -267,6 +267,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         })
     }
 
+    // ---- Drag to move ----
+
+    /** A recurring occurrence dragged to a new time, waiting for "this / following / all". */
+    var moveAsk by mutableStateOf<Triple<Instance, EventDetails, Long>?>(null)
+
+    /** Moves an occurrence dragged in the day/week grid by [shiftMs]. */
+    fun move(i: Instance, shiftMs: Long) {
+        if (shiftMs == 0L) return
+        viewModelScope.launch {
+            val e = runCatching { repo.event(i.eventId) }.getOrNull() ?: return@launch say("This event no longer exists")
+            if (e.allDay) return@launch
+            if (e.isRecurring || e.isException) moveAsk = Triple(i, e, shiftMs) else applyMove(i, e, shiftMs, Scope.ALL)
+        }
+    }
+
+    fun applyMove(i: Instance, e: EventDetails, shiftMs: Long, scope: Scope) {
+        val before = draftFrom(e, i.begin)
+        val moved = before.copy(
+            start = java.time.Instant.ofEpochMilli(i.begin + shiftMs).atZone(before.zone).toLocalDateTime(),
+            end = java.time.Instant.ofEpochMilli(i.end + shiftMs).atZone(before.zone).toLocalDateTime(),
+        )
+        viewModelScope.launch {
+            val r = runCatching { repo.update(e, moved, scope, i.begin) }
+            if (r.isFailure) return@launch say("Couldn't move: " + (r.exceptionOrNull()?.message ?: "unknown error"))
+            if (e.isRecurring || e.isException) say("Event moved")
+            else _undo.tryEmit(UndoMessage("Event moved") {
+                // A one-off event goes back to where it was.
+                viewModelScope.launch {
+                    runCatching { repo.event(e.id)?.let { now -> repo.update(now, before, Scope.ALL, now.dtStart) } }
+                        .onFailure { say("Couldn't undo: " + (it.message ?: "unknown error")) }
+                }
+            })
+        }
+    }
+
     fun setCalendarVisible(cal: CalendarInfo, visible: Boolean) = write { repo.setCalendarVisible(cal.id, visible) }
 
     fun respond(event: EventDetails, cal: CalendarInfo, status: Int) {

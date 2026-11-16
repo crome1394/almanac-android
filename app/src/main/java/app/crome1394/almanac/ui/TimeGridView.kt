@@ -7,6 +7,14 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -173,6 +181,20 @@ private fun AllDayRow(vm: AppViewModel, dates: List<LocalDate>, events: List<Ins
     }
 }
 
+/** An event being dragged to a new time (press and hold, then move). */
+private class GridDrag(val i: Instance, val dayIndex: Int, val startMin: Int, val lenMin: Int, val anchorY: Float) {
+    var dx by mutableFloatStateOf(0f)
+    var dy by mutableFloatStateOf(0f)
+
+    /** Where the event would land: days moved and minutes moved (snapped to 15). */
+    fun target(hourPx: Float, colPx: Float, days: Int): Pair<Int, Int> {
+        val dd = if (colPx > 0) Math.round(dx / colPx).coerceIn(-dayIndex, days - 1 - dayIndex) else 0
+        val raw = startMin + dy / hourPx * 60f
+        val snapped = (Math.round(raw / 15f) * 15).coerceIn(0, 1440 - 15)
+        return dd to snapped - startMin
+    }
+}
+
 @Composable
 private fun Grid(
     vm: AppViewModel, dates: List<LocalDate>, events: List<Instance>, hourHeight: Float,
@@ -182,8 +204,29 @@ private fun Grid(
     val zone = ZoneId.systemDefault()
     val line = MaterialTheme.colorScheme.outlineVariant
     val hourDp = hourHeight.dp
+    val density = LocalDensity.current
+    val hourPx = with(density) { hourDp.toPx() }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
+    var drag by remember { mutableStateOf<GridDrag?>(null) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val cals by vm.calendars.collectAsStateWithLifecycle()
+
+    // While dragging near the top or bottom edge, scroll the grid (and the event with it).
+    LaunchedEffect(drag) {
+        val d = drag ?: return@LaunchedEffect
+        val edge = with(density) { 48.dp.toPx() }
+        while (drag === d) {
+            val y = d.anchorY + d.dy - scroll.value
+            val step = when {
+                y < edge -> -with(density) { 6.dp.toPx() }
+                y > scroll.viewportSize - edge -> with(density) { 6.dp.toPx() }
+                else -> 0f
+            }
+            if (step != 0f) d.dy += scroll.scrollBy(step)
+            delay(16)
+        }
+    }
 
     Box(
         Modifier.fillMaxSize()
@@ -201,7 +244,7 @@ private fun Grid(
                     } while (ev.changes.any { it.pressed })
                 }
             }
-            .verticalScroll(scroll)
+            .verticalScroll(scroll, enabled = drag == null)
             .testTag("grid"),
     ) {
         Row(Modifier.fillMaxWidth().height(hourDp * 24 + 8.dp).padding(top = 8.dp)) {
@@ -216,7 +259,7 @@ private fun Grid(
                     )
                 }
             }
-            Box(
+            BoxWithConstraints(
                 Modifier.weight(1f).fillMaxHeight().drawBehind {
                     val hp = hourDp.toPx()
                     for (h in 0..24) drawLine(line, Offset(0f, h * hp), Offset(size.width, h * hp), 1f)
@@ -224,10 +267,54 @@ private fun Grid(
                     for (k in 1 until dates.size) drawLine(line, Offset(k * w, 0f), Offset(k * w, size.height), 1f)
                 },
             ) {
+                val colW = maxWidth / dates.size
+                val colPx = with(density) { colW.toPx() }
                 Row(Modifier.fillMaxSize()) {
-                    dates.forEach { d ->
-                        DayColumn(vm, d, events.filter { !it.inAllDayRow && it.covers(d, zone) && it.end > d.atStartOfDay(zone).toInstant().toEpochMilli() },
-                            hourDp, now, compact = dates.size > 3, modifier = Modifier.weight(1f).fillMaxHeight())
+                    dates.forEachIndexed { k, d ->
+                        val dayStart = d.atStartOfDay(zone).toInstant().toEpochMilli()
+                        DayColumn(
+                            vm, d, events.filter { !it.inAllDayRow && it.covers(d, zone) && it.end > dayStart },
+                            hourDp, now, compact = dates.size > 3, dragging = drag?.i,
+                            canDrag = { i -> i.startDate(zone) == d && cals.firstOrNull { it.id == i.calendarId }?.writable == true },
+                            onDragStart = { i, startMin, lenMin, y ->
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                drag = GridDrag(i, k, startMin, lenMin, startMin / 60f * hourPx + y)
+                            },
+                            onDrag = { dx, dy -> drag?.let { it.dx += dx; it.dy += dy } },
+                            onDragEnd = {
+                                val g = drag
+                                drag = null
+                                if (g != null) {
+                                    val (dd, dm) = g.target(hourPx, colPx, dates.size)
+                                    if (dd == 0 && dm == 0) vm.menuFor = g.i
+                                    else {
+                                        val from = Instant.ofEpochMilli(g.i.begin).atZone(zone)
+                                        vm.move(g.i, from.plusDays(dd.toLong()).plusMinutes(dm.toLong()).toInstant().toEpochMilli() - g.i.begin)
+                                    }
+                                }
+                            },
+                            onDragCancel = { drag = null },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                }
+                drag?.let { g ->
+                    val (dd, dm) = g.target(hourPx, colPx, dates.size)
+                    val start = g.startMin + dm
+                    val shape = RoundedCornerShape(6.dp)
+                    val fill = eventFill(g.i.color, isDark(), false)
+                    val fg = onEventColor(Color(g.i.color))
+                    val day = dates[g.dayIndex + dd]
+                    val begin = day.atStartOfDay(zone).plusMinutes(start.toLong()).toInstant().toEpochMilli()
+                    Column(
+                        Modifier.offset(x = colW * (g.dayIndex + dd), y = hourDp * (start / 60f))
+                            .width(colW - 2.dp).height(hourDp * (g.lenMin.coerceAtLeast(24) / 60f))
+                            .shadow(8.dp, shape).clip(shape).background(fill)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .testTag("drag-ghost"),
+                    ) {
+                        Text(g.i.title.ifBlank { "(No title)" }, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        Text("${fmt.time(begin)} – ${fmt.time(begin + (g.i.end - g.i.begin))}", color = fg, fontSize = 11.sp, maxLines = 1)
                     }
                 }
             }
@@ -236,7 +323,12 @@ private fun Grid(
 }
 
 @Composable
-private fun DayColumn(vm: AppViewModel, day: LocalDate, events: List<Instance>, hourDp: Dp, now: Long, compact: Boolean, modifier: Modifier) {
+private fun DayColumn(
+    vm: AppViewModel, day: LocalDate, events: List<Instance>, hourDp: Dp, now: Long, compact: Boolean,
+    dragging: Instance?, canDrag: (Instance) -> Boolean,
+    onDragStart: (Instance, Int, Int, Float) -> Unit, onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onDragCancel: () -> Unit,
+    modifier: Modifier,
+) {
     val zone = ZoneId.systemDefault()
     val density = LocalDensity.current
     val dayStart = day.atStartOfDay(zone).toInstant().toEpochMilli()
@@ -261,7 +353,27 @@ private fun DayColumn(vm: AppViewModel, day: LocalDate, events: List<Instance>, 
             val top = hourDp * (p.start / 60f)
             val height = (hourDp * ((p.end - p.start).coerceAtLeast(24) / 60f)) - 1.dp
             val w = colW / p.cols
-            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, modifier = Modifier.offset(x = w * p.col, y = top).width(w * p.span - 2.dp).height(height))
+            val draggable = canDrag(i)
+            // One gesture handler tells a tap (open), a hold (menu) and a hold-then-move (drag) apart.
+            val gestures = if (draggable) Modifier.pointerInput(i.key) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume() // so the grid's tap-to-create doesn't also fire
+                    val long = awaitLongPressOrCancellation(down.id)
+                    if (long == null) {
+                        val up = currentEvent.changes.firstOrNull { it.id == down.id }
+                        if (up != null && up.changedToUp()) { up.consume(); vm.open(i) }
+                        return@awaitEachGesture
+                    }
+                    onDragStart(i, p.start, ((i.end - i.begin) / 60_000).toInt(), long.position.y)
+                    val ended = drag(long.id) { c -> val d = c.positionChange(); c.consume(); onDrag(d.x, d.y) }
+                    // A hold without moving ends with the event where it was, which opens the menu.
+                    if (ended) onDragEnd() else onDragCancel()
+                }
+            } else Modifier
+            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, clickable = !draggable,
+                modifier = Modifier.offset(x = w * p.col, y = top).width(w * p.span - 2.dp).height(height)
+                    .then(if (dragging?.key == i.key) Modifier.alpha(0.35f) else Modifier).then(gestures))
         }
         if (day == LocalDate.now()) {
             val mins = Instant.ofEpochMilli(now).atZone(zone).toLocalTime().let { it.hour * 60 + it.minute }
@@ -273,7 +385,7 @@ private fun DayColumn(vm: AppViewModel, day: LocalDate, events: List<Instance>, 
 }
 
 @Composable
-private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, modifier: Modifier) {
+private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, clickable: Boolean, modifier: Modifier) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
@@ -284,7 +396,7 @@ private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: B
         modifier.clip(shape)
             .then(if (outlined) Modifier.background(MaterialTheme.colorScheme.surface).androidxBorder(fill, shape) else Modifier.background(fill))
             .androidxBorder(MaterialTheme.colorScheme.surface, shape)
-            .clickable { vm.open(i) }
+            .then(if (clickable) Modifier.combinedClickable(onLongClick = { vm.menuFor = i }) { vm.open(i) } else Modifier)
             .padding(horizontal = if (compact) 3.dp else 6.dp, vertical = 2.dp)
             .testTag("event"),
     ) {

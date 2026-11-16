@@ -104,7 +104,7 @@ fun EditEventScreen(vm: AppViewModel, req: EditRequest) {
 }
 
 /** The editable form of an existing event at the occurrence starting [instanceBegin]. */
-private fun draftFrom(e: EventDetails, instanceBegin: Long): EventDraft {
+internal fun draftFrom(e: EventDetails, instanceBegin: Long): EventDraft {
     val evZone = runCatching { ZoneId.of(e.timeZone) }.getOrDefault(ZoneId.systemDefault())
     val zone = if (e.allDay) ZoneOffset.UTC else evZone
     val len = (e.dtEnd?.let { it - e.dtStart }) ?: durationMs(e.duration)

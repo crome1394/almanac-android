@@ -100,6 +100,12 @@ fun EventActionsHost(vm: AppViewModel) {
             Spacer(Modifier.size(24.dp))
         }
     }
+    vm.moveAsk?.let { (i, e, shift) ->
+        ScopeDialog("Move recurring event", "OK", onDismiss = { vm.moveAsk = null }) { s ->
+            vm.moveAsk = null
+            vm.applyMove(i, e, shift, s)
+        }
+    }
     vm.deleteAsk?.let { (i, e) ->
         DeleteDialog(recurring = true, onDismiss = { vm.deleteAsk = null }) { s ->
             vm.deleteAsk = null
