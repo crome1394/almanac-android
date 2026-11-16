@@ -17,7 +17,7 @@ calendar store, and Google's sync adapter does the syncing.
 | Package | Contents |
 |---|---|
 | `data` | `CalendarRepository` (all reads and writes), the model (`CalendarInfo`, `Instance`, `EventDetails`, `EventDraft`), `RRule` + `RecurrenceText`, `DayLayout` and `MonthLayout` (grid placement), `EventTheme` (picture themes from titles), `VideoCall` (call links), `Ics` (import), `Birthdays`, `ContactsSearch`, `Prefs` |
-| `ui` | `AppViewModel` (navigation stack, settings, data access), `MainScreen` (top bar, drawer, FAB), the views (`ScheduleView`, `TimeGridView`, `MonthView`), `EventDetailScreen`, `EditEventScreen` + `Dialogs`, `EventActions` (swipe, hold menu, delete/move questions), `Art` (month landscapes and event pictures, drawn in code), search/settings/import, `Fmt` (dates in the phone's language and 12/24-hour setting), theme |
+| `ui` | `AppViewModel` (navigation stack, settings, data access), `MainScreen` (top bar, drawer, FAB), the views (`ScheduleView`, `TimeGridView`, `MonthView`), `EventDetailScreen`, `EditEventScreen` + `Dialogs`, `EventActions` (swipe, hold menu, delete/move questions), `QuickMenu` (the ⋮ button), `Overlays` (search and new-event cards), `Art` (month landscapes and event pictures, drawn in code), search/settings/import, `Fmt` (dates in the phone's language and 12/24-hour setting), theme |
 | `notify` | `Notifier` (reads due alerts, posts, snoozes), `ReminderReceiver`, `ReminderActionReceiver` |
 | `widget` | Glance schedule and month widgets |
 | `src/debug` | `DemoSeeder`: made-up test events; `ArtGallery`: all the artwork on one screen. Debug builds only |
@@ -36,6 +36,9 @@ calendar store, and Google's sync adapter does the syncing.
   requires for that account type.
 - **Guests** are diffed against the stored list, so unchanged guests keep their
   replies.
+- **Cards.** `Screen.isOverlay` marks screens drawn as a card (search, a new
+  event). The root draws the last ordinary screen in the stack and the overlay
+  above it, so the calendar stays visible underneath.
 - **Deletes wait for Undo.** A delete hides the occurrence at once and runs
   five seconds later in the application's scope, so leaving the screen doesn't
   cancel it; if the process dies first, nothing is deleted.

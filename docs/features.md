@@ -10,8 +10,9 @@ How Almanac covers the Google Calendar app, screen by screen.
 | Calendar list with colored checkboxes per account | Same, plus Birthdays and phone-only calendars |
 | Month name in the top bar opens a mini month | Same (not in Month view); dots mark busy days |
 | Today button with today's date | Same |
-| Search | Searches titles, places, descriptions and guests across ±2–3 years |
-| + button | Opens a new event at the next whole hour |
+| Search | A card over the calendar; searches titles, places, descriptions and guests across ±2–3 years |
+| + button | A ⋮ button instead: a menu above the thumb with Create event, the views, Refresh and Jump to today |
+| Toolbar at the top | Or at the bottom (Settings → Toolbar at the bottom) |
 | Pull to refresh | In Schedule; asks DAVx5 to sync now |
 | Month illustrations in Schedule | An original landscape per month, drawn in layers that drift as you scroll |
 | Pictures on dinners, birthdays, flights… | Picture cards for 44 kinds of event, chosen from words in the title |
@@ -23,7 +24,8 @@ How Almanac covers the Google Calendar app, screen by screen.
 - **Schedule:** endless list of days with events, week ranges, month banners,
   a red line at the current time, "Nothing planned" on an empty today. Swipe
   an event right to delete it (Undo for a few seconds); press and hold for
-  Open, Edit, Duplicate and Delete.
+  Open, Edit, Duplicate and Delete; drag the six-dot handle to move it to
+  another day (every day shows as a drop target while you drag).
 - **Day / 3 days / Week:** 24-hour grid. All-day and 24-hour+ events sit on
   top, overlapping events share the width, and a red line marks now. Pinch to
   zoom, swipe for the next period, tap a free slot to add an event there, tap
@@ -43,6 +45,10 @@ busy/free and visibility. Menu: Delete, Duplicate, Share. If you are a guest
 you can answer **Going? Yes / No / Maybe**.
 
 ## Editing
+
+A new event opens in a card from the bottom; drag its handle to make it
+taller or shorter, and tap outside to close it (unsaved changes ask first).
+Editing an existing event is full screen.
 
 Title, calendar, all-day, start and end (changing the start keeps the length;
 an end time before the start on the same day runs past midnight), time zone,
@@ -77,7 +83,7 @@ Settings), **Dismiss** and **Map**. Tapping it opens the event.
 
 | Group | Settings |
 |---|---|
-| General | Theme, start of week, week numbers, show declined events, dim past events, default event duration |
+| General | Theme, toolbar at the bottom, start of week, week numbers, show declined events, dim past events, default event duration |
 | Notifications | On/off, default notification, default all-day notification, snooze length, Android's notification settings |
 | Calendars | Default calendar for new events; rename, recolor or delete phone-only calendars; recolor synced calendars (on this phone only) |
 

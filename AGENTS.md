@@ -54,7 +54,9 @@ GPU host, start it with `-gpu swiftshader_indirect`.
   `uiautomator dump` finds controls: `menu`, `view-schedule|day|three_day|week|month`,
   `new-event`, `today`, `search`, `edit`, `more`, `save`, `cancel`,
   `title-field`, `start-time`, `repeat`, `cell-YYYY-MM-DD`, `event`,
-  `join`, `drag-ghost`.
+  `join`, `drag-ghost`, `drag-handle`, `quick-create`, `quick-<view>`,
+  `quick-refresh`, `quick-today`, `search-field`, `card-handle`. The ⋮ button
+  keeps the id `new-event`.
   Dialogs and menus are separate windows: find them by their text.
 - Finish with unit tests passing, a clean build, and the change checked on an
   emulator (screenshots for anything visual, in light and dark).

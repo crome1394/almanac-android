@@ -32,3 +32,11 @@ First version.
 - Recolor synced calendars (kept in Almanac on this phone).
 - "Join with …" button for Meet, Zoom, Teams, Jitsi and other call links.
 - The `.ics` import preview shows how each event repeats.
+- Drag events to another day in Schedule; a six-dot handle marks every event
+  that can be moved (in the grid it starts a drag without the long press).
+- A floating ⋮ button opens a menu above the thumb: Create event, the five
+  views, Refresh and Jump to today.
+- Settings → Toolbar at the bottom, for one-handed use.
+- Search and new events open as cards over the calendar; drag the new-event
+  card's handle to resize it.
+- New app icon.
