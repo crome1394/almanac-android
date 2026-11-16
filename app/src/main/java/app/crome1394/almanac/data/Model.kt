@@ -111,6 +111,8 @@ data class EventDetails(
     val originalInstanceTime: Long?,
     val selfStatus: Int,
     val status: Int?,
+    /** The sync adapter's id for the event; null until it has been synced (and always for phone-only calendars). */
+    val syncId: String?,
     val reminders: List<Reminder>,
     val attendees: List<Attendee>,
 ) {

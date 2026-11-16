@@ -244,6 +244,7 @@ class CalendarRepository(private val context: Context) {
                 originalInstanceTime = c.longOrNull(21),
                 selfStatus = c.getInt(22),
                 status = c.intOrNull(23),
+                syncId = c.getString(24)?.takeIf { it.isNotBlank() },
                 reminders = reminders(id),
                 attendees = attendees(id),
             )
@@ -296,8 +297,22 @@ class CalendarRepository(private val context: Context) {
                 // Move the whole series by however much this occurrence moved.
                 val shift = d.startMillis() - instanceBegin
                 val draft = d.copy(seriesStartMillis = original.dtStart + shift)
-                cr.update(eventUri(original.id), draft.toValues(isNew = false), null, null)
+                val v = draft.toValues(isNew = false)
+                if (!draft.rrule.isNullOrBlank()) {
+                    // Keep the series' extra dates and left-out occurrences (see seriesValues).
+                    v.put(Events.RDATE, original.rdate)
+                    v.put(Events.EXDATE, shiftExdates(original.exdate, shift))
+                }
+                cr.update(eventUri(original.id), v, null, null)
                 writeChildren(original.id, d, replace = true)
+            }
+            scope == Scope.THIS && original.syncId == null -> {
+                // See excludeOccurrence: an unsynced series can't hold exception rows safely.
+                excludeOccurrence(original, instanceBegin)
+                val newId = cr.insert(Events.CONTENT_URI, d.copy(rrule = null).toValues(isNew = true).apply {
+                    put(Events.CALENDAR_ID, original.calendarId)
+                })?.let(ContentUris::parseId) ?: error("The calendar store refused the change")
+                writeChildren(newId, d, replace = false)
             }
             scope == Scope.THIS -> {
                 val v = d.toValues(isNew = false, asException = true).apply {
@@ -344,6 +359,7 @@ class CalendarRepository(private val context: Context) {
             scope == Scope.ALL || (scope == Scope.FOLLOWING && instanceBegin <= original.dtStart) ->
                 cr.delete(eventUri(original.id), null, null)
             scope == Scope.FOLLOWING -> endSeriesBefore(original, instanceBegin)
+            original.syncId == null -> excludeOccurrence(original, instanceBegin)
             else -> {
                 val v = ContentValues().apply {
                     put(Events.ORIGINAL_INSTANCE_TIME, instanceBegin)
@@ -363,8 +379,45 @@ class CalendarRepository(private val context: Context) {
         val rule = RRule.parse(original.rrule) ?: return 0
         val kept = countOccurrences(original.id, original.dtStart, instanceBegin)
         val ended = rule.copy(count = null, until = RRule.untilBefore(instanceBegin, original.allDay))
-        cr.update(eventUri(original.id), ContentValues().apply { put(Events.RRULE, ended.format()) }, null, null)
+        cr.update(eventUri(original.id), seriesValues(original).apply { put(Events.RRULE, ended.format()) }, null, null)
         return kept
+    }
+
+    /**
+     * Leaves one occurrence out of a series by adding it to EXDATE.
+     *
+     * Android's calendar store links exception rows to their series only through the series'
+     * _sync_id. A series that has not been synced yet (and every series in a phone-only
+     * calendar) has none, and then the store drops the series' occurrences when an exception is
+     * added, and shows the exception twice on the next full rebuild (see AOSP
+     * CalendarInstancesHelper.updateRecurrenceInstancesLocked). EXDATE has no such problem and
+     * is plain iCalendar, so sync adapters upload it as is.
+     */
+    private fun excludeOccurrence(original: EventDetails, instanceBegin: Long) {
+        val date = if (original.allDay) java.time.Instant.ofEpochMilli(instanceBegin).atZone(ZoneOffset.UTC)
+            .format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+        else java.time.Instant.ofEpochMilli(instanceBegin).atZone(ZoneOffset.UTC)
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+        val existing = original.exdate?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        if (date in existing) return
+        val v = seriesValues(original).apply { put(Events.EXDATE, (existing + date).joinToString(",")) }
+        cr.update(eventUri(original.id), v, null, null)
+    }
+
+    /**
+     * The columns the calendar store needs to re-expand a series. Its update path rebuilds a
+     * series' occurrences from the values passed in, not from the stored row (AOSP
+     * CalendarProvider2.handleUpdateEvents → updateInstancesLocked(modValues)), so an update
+     * that leaves any of these out expands the series wrongly until the next full rebuild.
+     */
+    private fun seriesValues(e: EventDetails): ContentValues = ContentValues().apply {
+        put(Events.DTSTART, e.dtStart)
+        put(Events.DURATION, e.duration ?: EventDraft.durationOf((e.dtEnd ?: e.dtStart) - e.dtStart, e.allDay))
+        put(Events.ALL_DAY, if (e.allDay) 1 else 0)
+        put(Events.EVENT_TIMEZONE, e.timeZone)
+        put(Events.RRULE, e.rrule)
+        put(Events.RDATE, e.rdate)
+        put(Events.EXDATE, e.exdate)
     }
 
     private fun countOccurrences(eventId: Long, from: Long, before: Long): Int {
@@ -449,7 +502,7 @@ class CalendarRepository(private val context: Context) {
             Events.RRULE, Events.RDATE, Events.EXDATE, Events.DISPLAY_COLOR, Events.EVENT_COLOR_KEY,
             Events.EVENT_COLOR, Events.AVAILABILITY, Events.ACCESS_LEVEL, Events.ORGANIZER,
             Events.GUESTS_CAN_MODIFY, Events.ORIGINAL_ID, Events.ORIGINAL_INSTANCE_TIME,
-            Events.SELF_ATTENDEE_STATUS, Events.STATUS,
+            Events.SELF_ATTENDEE_STATUS, Events.STATUS, Events._SYNC_ID,
         )
 
         private fun intSet(s: String?, def: Set<Int>): Set<Int> =
@@ -534,6 +587,27 @@ data class EventDraft(
             val d = Duration.ofMillis(ms.coerceAtLeast(0))
             return if (allDay) "P${d.toDays().coerceAtLeast(1)}D" else "P${d.seconds}S"
         }
+    }
+}
+
+/**
+ * Moves left-out occurrences along with a series that moved by [shiftMs], so a deleted
+ * occurrence stays deleted. Entries in UTC ("…Z") and plain dates are moved; anything else
+ * (a TZID-prefixed list from another app) is kept as it was.
+ */
+internal fun shiftExdates(exdate: String?, shiftMs: Long): String? {
+    if (exdate.isNullOrBlank() || shiftMs == 0L || exdate.contains(';')) return exdate
+    val utc = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+    return exdate.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",") { e ->
+        runCatching {
+            when {
+                e.length == 16 && e.endsWith("Z") -> java.time.LocalDateTime.parse(e, utc).atZone(ZoneOffset.UTC)
+                    .plusNanos(shiftMs * 1_000_000).format(utc)
+                e.length == 8 -> LocalDate.parse(e, java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+                    .plusDays(Math.floorDiv(shiftMs, 86_400_000L)).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+                else -> e
+            }
+        }.getOrDefault(e)
     }
 }
 

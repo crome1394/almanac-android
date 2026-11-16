@@ -92,3 +92,13 @@ class RecurrenceTest {
         assertEquals(Freq.WEEKLY, RRule.parse("freq=weekly")!!.freq)
     }
 }
+
+class ExdateShiftTest {
+    @Test fun shiftsUtcAndDateEntries() {
+        assertEquals("20261116T153000Z,20261117T153000Z",
+            app.crome1394.almanac.data.shiftExdates("20261116T143000Z, 20261117T143000Z", 3_600_000))
+        assertEquals("20261118", app.crome1394.almanac.data.shiftExdates("20261116", 2 * 86_400_000L))
+        assertEquals("America/New_York;20261116T093000", app.crome1394.almanac.data.shiftExdates("America/New_York;20261116T093000", 3_600_000))
+        assertNull(app.crome1394.almanac.data.shiftExdates(null, 5))
+    }
+}
