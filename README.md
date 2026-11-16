@@ -17,13 +17,14 @@ leaves the phone except through your own sync app.
 
 | | |
 |---|---|
-| **Views** | Schedule, Day, 3 days, Week and Month; swipe between periods, pinch to zoom the day grid, tap a free slot to add an event |
+| **Views** | Schedule (illustrated months, picture cards for dinners, birthdays, flights…), Day, 3 days, Week and Month; swipe between periods, pinch to zoom, tap a free slot to add an event |
 | **Events** | Title, all-day, start/end, time zone, repeat (presets and custom rules), guests with contact suggestions, location, notifications, color, description, busy/free, visibility |
+| **Quick edits** | Drag events to a new time or day; swipe right to delete (with Undo); press and hold for a menu |
 | **Repeating events** | Change or delete *this event*, *this and following* or *all events* |
-| **Invitations** | Guest list with replies; answer Yes / No / Maybe; email guests |
+| **Invitations** | Guest list with replies; answer Yes / No / Maybe; email guests; Join button for video calls |
 | **Reminders** | Notifications with Snooze, Dismiss and Map; default reminders for timed and all-day events |
 | **Find** | Search across all calendars; mini month under the title; Today button |
-| **Calendars** | Show/hide per calendar, phone-only calendars, birthdays from contacts |
+| **Calendars** | Show/hide and recolor per calendar, Google's 11 event colors, phone-only calendars, birthdays from contacts |
 | **Other apps** | Opens "Add to calendar" requests, event links and `.ics` files |
 | **Home screen** | Schedule and month widgets |
 | **Look** | Material 3 in Google Calendar's style, light/dark, Material You colors |

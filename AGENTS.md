@@ -26,12 +26,19 @@ to their server.** Data safety matters more than features:
 ## Build, run, test
 
 ```sh
-./gradlew assembleDebug                 # app id app.crome1394.almanac.debug ("Almanac" debug)
-./gradlew testDebugUnitTest             # unit tests (recurrence, layout, .ics, birthdays, EXDATE)
+./gradlew assembleDebug                 # app id app.crome1394.almanac.debug, named "Almanac (debug)"
+./gradlew testDebugUnitTest             # unit tests (recurrence, layouts, .ics, birthdays, EXDATE, colors, themes, call links)
 adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder
 adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder --ez soon true
+adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder --ez css true
+adb -s emulator-5554 shell am start -n app.crome1394.almanac.debug/app.crome1394.almanac.ArtGallery [--ez dark true] [--ez events true]
 ```
+
+`--ez css true` makes a calendar under a made-up account that offers CSS3
+event colors the way DAVx5 does. The calendar store drops it when the
+emulator restarts (its account doesn't exist). If the emulator crashes in the
+GPU host, start it with `-gpu swiftshader_indirect`.
 
 - **Test on an emulator, never on the owner's phone.** The phone's calendar
   store is their real, synced data. `DemoSeeder` (debug builds only) creates
@@ -46,7 +53,8 @@ adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome
 - Compose test tags double as view ids (`testTagsAsResourceId`), so
   `uiautomator dump` finds controls: `menu`, `view-schedule|day|three_day|week|month`,
   `new-event`, `today`, `search`, `edit`, `more`, `save`, `cancel`,
-  `title-field`, `start-time`, `repeat`, `cell-YYYY-MM-DD`, `event`.
+  `title-field`, `start-time`, `repeat`, `cell-YYYY-MM-DD`, `event`,
+  `join`, `drag-ghost`.
   Dialogs and menus are separate windows: find them by their text.
 - Finish with unit tests passing, a clean build, and the change checked on an
   emulator (screenshots for anything visual, in light and dark).

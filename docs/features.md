@@ -13,19 +13,26 @@ How Almanac covers the Google Calendar app, screen by screen.
 | Search | Searches titles, places, descriptions and guests across ±2–3 years |
 | + button | Opens a new event at the next whole hour |
 | Pull to refresh | In Schedule; asks DAVx5 to sync now |
-| Month illustrations in Schedule | Seasonal colored banners |
-| Tasks, Goals, Working location, Google Meet | Not included (events only; no Google services) |
+| Month illustrations in Schedule | An original landscape per month, drawn in layers that drift as you scroll |
+| Pictures on dinners, birthdays, flights… | Picture cards for 44 kinds of event, chosen from words in the title |
+| Google Meet | A "Join with …" button for Meet, Zoom, Teams, Jitsi, Webex, Whereby, Nextcloud Talk links; creating Meet calls needs Google |
+| Tasks, Goals, Working location, Find a time | Not included (see below) |
 
 ## Views
 
 - **Schedule:** endless list of days with events, week ranges, month banners,
-  a red line at the current time, "Nothing planned" on an empty today.
+  a red line at the current time, "Nothing planned" on an empty today. Swipe
+  an event right to delete it (Undo for a few seconds); press and hold for
+  Open, Edit, Duplicate and Delete.
 - **Day / 3 days / Week:** 24-hour grid. All-day and 24-hour+ events sit on
   top, overlapping events share the width, and a red line marks now. Pinch to
   zoom, swipe for the next period, tap a free slot to add an event there, tap
-  a day header to open that day.
-- **Month:** full month grid, event chips with "+N" when a day is full, tap a
-  day to open it, swipe between months. Optional week numbers.
+  a day header to open that day. Press and hold an event and drag it to move
+  it (15-minute steps, across days, the grid scrolls at the edges); holding
+  without moving opens the event menu.
+- **Month:** full month grid; an event spanning several days is one bar,
+  "+N" when a day is full; tap a day to open it, swipe between months.
+  Optional week numbers.
 
 ## Event details
 
@@ -72,4 +79,20 @@ Settings), **Dismiss** and **Map**. Tapping it opens the event.
 |---|---|
 | General | Theme, start of week, week numbers, show declined events, dim past events, default event duration |
 | Notifications | On/off, default notification, default all-day notification, snooze length, Android's notification settings |
-| Calendars | Default calendar for new events; rename, recolor or delete phone-only calendars |
+| Calendars | Default calendar for new events; rename, recolor or delete phone-only calendars; recolor synced calendars (on this phone only) |
+
+## Colors
+
+Events can take any of Google's 11 colors. Phone-only calendars store them by
+name. DAVx5 offers the CSS3 named colors once its **Event colors** setting is
+on (account settings, CalDAV); Almanac stores the nearest one and draws it in
+Google's shade, so it syncs to the server as a standard `COLOR`. With the
+setting off, the editor says so instead of offering colors.
+
+## Not included
+
+- **Tasks:** DAVx5 syncs tasks to a separate tasks app (jtx Board, Tasks.org,
+  OpenTasks), and Davit serves events only for now.
+- **Goals and Working location:** Google-only features with no CalDAV
+  equivalent.
+- **Find a time:** needs other people's free/busy times from the server.

@@ -16,11 +16,11 @@ calendar store, and Google's sync adapter does the syncing.
 
 | Package | Contents |
 |---|---|
-| `data` | `CalendarRepository` (all reads and writes), the model (`CalendarInfo`, `Instance`, `EventDetails`, `EventDraft`), `RRule` + `RecurrenceText`, `DayLayout`, `Ics` (import), `Birthdays`, `ContactsSearch`, `Prefs` |
-| `ui` | `AppViewModel` (navigation stack, settings, data access), `MainScreen` (top bar, drawer, FAB), the views (`ScheduleView`, `TimeGridView`, `MonthView`), `EventDetailScreen`, `EditEventScreen` + `Dialogs`, search/settings/import, `Fmt` (dates in the phone's language and 12/24-hour setting), theme |
+| `data` | `CalendarRepository` (all reads and writes), the model (`CalendarInfo`, `Instance`, `EventDetails`, `EventDraft`), `RRule` + `RecurrenceText`, `DayLayout` and `MonthLayout` (grid placement), `EventTheme` (picture themes from titles), `VideoCall` (call links), `Ics` (import), `Birthdays`, `ContactsSearch`, `Prefs` |
+| `ui` | `AppViewModel` (navigation stack, settings, data access), `MainScreen` (top bar, drawer, FAB), the views (`ScheduleView`, `TimeGridView`, `MonthView`), `EventDetailScreen`, `EditEventScreen` + `Dialogs`, `EventActions` (swipe, hold menu, delete/move questions), `Art` (month landscapes and event pictures, drawn in code), search/settings/import, `Fmt` (dates in the phone's language and 12/24-hour setting), theme |
 | `notify` | `Notifier` (reads due alerts, posts, snoozes), `ReminderReceiver`, `ReminderActionReceiver` |
 | `widget` | Glance schedule and month widgets |
-| `src/debug` | `DemoSeeder`: made-up test events, debug builds only |
+| `src/debug` | `DemoSeeder`: made-up test events; `ArtGallery`: all the artwork on one screen. Debug builds only |
 
 ## Data flow
 
@@ -36,6 +36,14 @@ calendar store, and Google's sync adapter does the syncing.
   requires for that account type.
 - **Guests** are diffed against the stored list, so unchanged guests keep their
   replies.
+- **Deletes wait for Undo.** A delete hides the occurrence at once and runs
+  five seconds later in the application's scope, so leaving the screen doesn't
+  cancel it; if the process dies first, nothing is deleted.
+- **Colors.** `Instance.color` and `EventDetails.color` are resolved in the
+  repository: an event color key that stands for one of Google's colors
+  (`Palette.choices`, nearest by RGB distance) is drawn in Google's shade; an
+  event without its own color takes its calendar's color, including one picked
+  in Almanac (`Settings.calendarColors`, never written to the store).
 
 ## Repeating events
 
