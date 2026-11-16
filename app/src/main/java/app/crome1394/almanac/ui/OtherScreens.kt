@@ -165,6 +165,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 Choice("Start of the week", if (s.weekStart == 0) "Region default (${s.firstDayOfWeek().getDisplayName(TextStyle.FULL, locale)})"
                 else DayOfWeek.of(s.weekStart).getDisplayName(TextStyle.FULL, locale)) { dialog = "week" }
             }
+            item { Toggle("Toolbar at the bottom", s.toolbarAtBottom) { v -> set { it.copy(toolbarAtBottom = v) } } }
             item { Toggle("Show week numbers", s.showWeekNumbers) { v -> set { it.copy(showWeekNumbers = v) } } }
             item { Toggle("Show declined events", !s.hideDeclined) { v -> set { it.copy(hideDeclined = !v) } } }
             item { Toggle("Dim past events", s.dimPast) { v -> set { it.copy(dimPast = v) } } }

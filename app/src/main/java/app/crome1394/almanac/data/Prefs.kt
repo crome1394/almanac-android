@@ -33,6 +33,8 @@ data class Settings(
     val hourHeightDp: Float = 52f,
     /** Colors chosen in Almanac for calendars, by calendar id. Kept on this phone only. */
     val calendarColors: Map<Long, Int> = emptyMap(),
+    /** The main screen's bar (menu, month, search, today) at the bottom, for one-handed use. */
+    val toolbarAtBottom: Boolean = false,
 ) {
     fun firstDayOfWeek(locale: Locale = Locale.getDefault()): DayOfWeek =
         if (weekStart in 1..7) DayOfWeek.of(weekStart) else WeekFields.of(locale).firstDayOfWeek
@@ -62,6 +64,7 @@ class Prefs(context: Context) {
         viewMode = enumOr(sp.getString("view", null), ViewMode.SCHEDULE),
         hourHeightDp = sp.getFloat("hourHeight", 52f),
         calendarColors = parseColors(sp.getString("calendarColors", null)),
+        toolbarAtBottom = sp.getBoolean("toolbarAtBottom", false),
     )
 
     fun update(f: (Settings) -> Settings) {
@@ -81,6 +84,7 @@ class Prefs(context: Context) {
             .putLong("defaultCalendar", s.defaultCalendarId)
             .putString("view", s.viewMode.name)
             .putFloat("hourHeight", s.hourHeightDp)
+            .putBoolean("toolbarAtBottom", s.toolbarAtBottom)
             .putString("calendarColors", s.calendarColors.entries.joinToString(",") { "${it.key}:${it.value}" })
             .apply()
         _settings.value = s

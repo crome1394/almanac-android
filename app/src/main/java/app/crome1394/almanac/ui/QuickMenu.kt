@@ -60,7 +60,7 @@ import app.crome1394.almanac.data.ViewMode
  * views, refresh, today), so the app can be used one-handed.
  */
 @Composable
-fun BoxScope.QuickMenu(vm: AppViewModel, bottomOffset: Dp = 0.dp) {
+fun BoxScope.QuickMenu(vm: AppViewModel, aboveBottomBar: Dp? = null) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
     BackHandler(enabled = open) { open = false }
@@ -71,7 +71,10 @@ fun BoxScope.QuickMenu(vm: AppViewModel, bottomOffset: Dp = 0.dp) {
     }
 
     Column(
-        Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp + bottomOffset),
+        Modifier.align(Alignment.BottomEnd)
+            // The bottom bar's height already includes the navigation bar.
+            .then(if (aboveBottomBar == null) Modifier.navigationBarsPadding() else Modifier)
+            .padding(end = 16.dp, bottom = 16.dp + (aboveBottomBar ?: 0.dp)),
         horizontalAlignment = Alignment.End,
     ) {
         AnimatedVisibility(

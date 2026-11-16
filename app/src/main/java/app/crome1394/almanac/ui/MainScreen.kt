@@ -14,6 +14,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -106,9 +109,10 @@ fun MainScreen(vm: AppViewModel) {
         },
     ) {
       Box(Modifier.fillMaxSize()) {
-        Scaffold(
-            topBar = {
-                Column {
+        val bottom = settings.toolbarAtBottom
+        var bottomBarPx by remember { mutableStateOf(0) }
+        // The bar (menu, month, search, today) sits at the top, or at the bottom for one-handed use.
+        val bar: @Composable () -> Unit = {
                     TopAppBar(
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawer.open() } }, Modifier.testTag("menu")) {
@@ -148,12 +152,19 @@ fun MainScreen(vm: AppViewModel) {
                                 TodayIcon(LocalDate.now().dayOfMonth)
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = if (bottom) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface),
+                        windowInsets = if (bottom) WindowInsets.navigationBars else TopAppBarDefaults.windowInsets,
                     )
+        }
+        val mini: @Composable () -> Unit = {
                     AnimatedVisibility(miniMonth && settings.viewMode != ViewMode.MONTH, enter = expandVertically(), exit = shrinkVertically()) {
                         MiniMonth(vm, vm.selectedDate) { d -> vm.selectedDate = d; vm.todayRequests.value++; miniMonth = false }
                     }
-                }
+        }
+        Scaffold(
+            topBar = { if (!bottom) Column { bar(); mini() } },
+            bottomBar = {
+                if (bottom) Column(Modifier.onGloballyPositioned { bottomBarPx = it.size.height }) { mini(); bar() }
             },
         ) { pad ->
             Box(Modifier.padding(pad).fillMaxSize()) {
@@ -171,7 +182,9 @@ fun MainScreen(vm: AppViewModel) {
                 }
             }
         }
-        QuickMenu(vm)
+        // Above the bottom bar (and the mini month when it is open there).
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        QuickMenu(vm, aboveBottomBar = if (bottom) with(density) { bottomBarPx.toDp() } else null)
       }
     }
     if (addCalendar) CalendarDialog(null, onDismiss = { addCalendar = false }) { name, color ->
