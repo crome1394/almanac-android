@@ -151,7 +151,7 @@ private fun DayHeaders(vm: AppViewModel, dates: List<LocalDate>, days: Int, week
 @Composable
 private fun AllDayRow(vm: AppViewModel, dates: List<LocalDate>, events: List<Instance>) {
     val zone = ZoneId.systemDefault()
-    val top = events.filter { it.allDay || it.isMultiDayTimed(zone) }
+    val top = events.filter { it.inAllDayRow }
     if (top.isEmpty()) return
     Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Box(Modifier.width(GUTTER))
@@ -211,7 +211,8 @@ private fun Grid(
                     Text(
                         fmt.hourLabel(h), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.End,
-                        modifier = Modifier.width(GUTTER - 8.dp).offset(y = hourDp * h - 7.dp),
+                        modifier = Modifier.width(GUTTER - 8.dp).offset(y = hourDp * h - 6.dp),
+                        lineHeight = 12.sp,
                     )
                 }
             }
@@ -225,7 +226,7 @@ private fun Grid(
             ) {
                 Row(Modifier.fillMaxSize()) {
                     dates.forEach { d ->
-                        DayColumn(vm, d, events.filter { !it.allDay && !it.isMultiDayTimed(zone) && it.covers(d, zone) },
+                        DayColumn(vm, d, events.filter { !it.inAllDayRow && it.covers(d, zone) && it.end > d.atStartOfDay(zone).toInstant().toEpochMilli() },
                             hourDp, now, compact = dates.size > 3, modifier = Modifier.weight(1f).fillMaxHeight())
                     }
                 }
@@ -260,7 +261,7 @@ private fun DayColumn(vm: AppViewModel, day: LocalDate, events: List<Instance>, 
             val top = hourDp * (p.start / 60f)
             val height = (hourDp * ((p.end - p.start).coerceAtLeast(24) / 60f)) - 1.dp
             val w = colW / p.cols
-            GridEvent(vm, i, compact, Modifier.offset(x = w * p.col, y = top).width(w * p.span - 2.dp).height(height))
+            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, modifier = Modifier.offset(x = w * p.col, y = top).width(w * p.span - 2.dp).height(height))
         }
         if (day == LocalDate.now()) {
             val mins = Instant.ofEpochMilli(now).atZone(zone).toLocalTime().let { it.hour * 60 + it.minute }
@@ -272,7 +273,7 @@ private fun DayColumn(vm: AppViewModel, day: LocalDate, events: List<Instance>, 
 }
 
 @Composable
-private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, modifier: Modifier) {
+private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, modifier: Modifier) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
@@ -288,7 +289,10 @@ private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, modifier:
             .testTag("event"),
     ) {
         Text(i.title.ifBlank { "(No title)" }, color = fg, fontSize = if (compact) 11.sp else 12.sp, fontWeight = FontWeight.Medium,
-            maxLines = 3, lineHeight = 14.sp,
+            maxLines = if (narrow) 1 else 3, softWrap = !narrow, lineHeight = 14.sp,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+            style = androidx.compose.ui.text.TextStyle(hyphens = androidx.compose.ui.text.style.Hyphens.Auto,
+                lineBreak = androidx.compose.ui.text.style.LineBreak.Paragraph),
             textDecoration = if (i.declined) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
         if (!compact) Text("${fmt.time(i.begin)} – ${fmt.time(i.end)}", color = fg.copy(alpha = 0.9f), fontSize = 11.sp, maxLines = 1)
         if (!compact && i.location.isNotBlank()) Text(i.location, color = fg.copy(alpha = 0.9f), fontSize = 11.sp, maxLines = 1)

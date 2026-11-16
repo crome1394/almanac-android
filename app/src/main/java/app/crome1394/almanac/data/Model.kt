@@ -61,9 +61,12 @@ data class Instance(
     fun covers(day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Boolean =
         !day.isBefore(startDate(zone)) && !day.isAfter(lastDate(zone))
 
-    /** Timed events that cross midnight are shown with the all-day ones, as Google does. */
+    /** Timed events that cross midnight. */
     fun isMultiDayTimed(zone: ZoneId = ZoneId.systemDefault()): Boolean =
         !allDay && lastDate(zone) != startDate(zone)
+
+    /** Shown in the all-day row of the day/week grid: all-day events and timed ones of 24 hours or more. */
+    val inAllDayRow: Boolean get() = allDay || end - begin >= 24 * 3_600_000L
 
     val key: String get() = "$eventId@$begin"
 }
