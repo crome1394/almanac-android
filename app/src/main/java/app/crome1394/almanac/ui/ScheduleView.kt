@@ -82,8 +82,14 @@ fun ScheduleView(vm: AppViewModel) {
     var anchor by remember { mutableStateOf(vm.selectedDate) }
     var from by remember { mutableStateOf(anchor.minusDays(60)) }
     var to by remember { mutableStateOf(anchor.plusDays(120)) }
+    // Set on every "go to a date" request (Today, mini month), even when the date hasn't changed.
+    var jumpPending by remember { mutableStateOf(true) }
     LaunchedEffect(todayReq) {
-        if (todayReq > 0) { anchor = vm.selectedDate; from = anchor.minusDays(60); to = anchor.plusDays(120) }
+        if (todayReq > 0) {
+            anchor = vm.selectedDate
+            if (anchor < from.plusDays(14) || anchor > to.minusDays(30)) { from = anchor.minusDays(60); to = anchor.plusDays(120) }
+            jumpPending = true
+        }
     }
     val events by rememberInstances(vm, from, to)
     val first = settings.firstDayOfWeek()
@@ -120,12 +126,13 @@ fun ScheduleView(vm: AppViewModel) {
 
     val list = rememberLazyListState()
     // Jump to the anchor day once its rows exist.
-    var scrolledFor by remember { mutableStateOf<LocalDate?>(null) }
-    LaunchedEffect(rows, anchor) {
-        if (events != null && scrolledFor != anchor) {
+    var scrolledOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(rows, jumpPending) {
+        if (events != null && jumpPending) {
             val idx = rows.indexOfFirst { it is DayRow && it.date >= anchor }.let { if (it < 0) rows.indexOfFirst { r -> r.date >= anchor } else it }
             if (idx >= 0) list.scrollToItem((idx - 1).coerceAtLeast(0))
-            scrolledFor = anchor
+            jumpPending = false
+            scrolledOnce = true
         }
     }
     // Keep the title in step with the list, and load more near either end.
@@ -133,7 +140,7 @@ fun ScheduleView(vm: AppViewModel) {
         snapshotFlow { list.firstVisibleItemIndex to list.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .distinctUntilChanged()
             .collect { (firstIdx, lastIdx) ->
-                if (scrolledFor == null) return@collect
+                if (!scrolledOnce || jumpPending) return@collect
                 rows.getOrNull(firstIdx + 1)?.date?.let { if (YearMonth.from(it) != YearMonth.from(vm.selectedDate)) vm.selectedDate = it }
                 if (lastIdx != null && lastIdx >= rows.size - 8) to = to.plusDays(120)
                 if (firstIdx <= 3 && rows.isNotEmpty()) { delay(100); from = from.minusDays(120) }

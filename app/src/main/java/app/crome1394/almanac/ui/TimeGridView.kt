@@ -91,7 +91,14 @@ fun TimeGridView(vm: AppViewModel, days: Int) {
     val pager = rememberPagerState(initialPage = pageOf(vm.selectedDate)) { CENTER * 2 }
 
     val todayReq by vm.todayRequests.collectAsStateWithLifecycle()
-    LaunchedEffect(todayReq) { if (todayReq > 0) pager.scrollToPage(pageOf(vm.selectedDate)) }
+    // Bumped on each "go to a date" request; pages scroll to the current time when it is today.
+    var timeJump by remember { mutableIntStateOf(0) }
+    LaunchedEffect(todayReq) {
+        if (todayReq > 0) {
+            pager.scrollToPage(pageOf(vm.selectedDate))
+            if (vm.selectedDate == LocalDate.now()) timeJump++
+        }
+    }
     LaunchedEffect(pager.settledPage) {
         val s = startOfPage(pager.settledPage)
         if (vm.selectedDate < s || vm.selectedDate > s.plusDays(days - 1L)) vm.selectedDate = s
@@ -112,6 +119,11 @@ fun TimeGridView(vm: AppViewModel, days: Int) {
         val dates = (0 until days).map { start.plusDays(it.toLong()) }
         val events by rememberInstances(vm, dates.first(), dates.last())
         val scroll = rememberScrollState()
+        LaunchedEffect(timeJump) {
+            if (timeJump > 0 && dates.contains(LocalDate.now())) {
+                scroll.animateScrollTo(with(density) { ((LocalTime.now().hour - 1).coerceAtLeast(0) * hourHeight).dp.roundToPx() })
+            }
+        }
         LaunchedEffect(Unit) {
             val target = if (scrollY >= 0) scrollY else with(density) {
                 val h = if (dates.contains(LocalDate.now())) (LocalTime.now().hour - 1).coerceAtLeast(0) else 7
