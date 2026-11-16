@@ -1,6 +1,22 @@
 package app.crome1394.almanac.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.alpha
 import app.crome1394.almanac.data.EventTheme
@@ -73,8 +89,13 @@ fun ScheduleView(vm: AppViewModel) {
     val first = settings.firstDayOfWeek()
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now()
+    val density = LocalDensity.current
 
-    val rows = remember(events, from, to, first) {
+    // An event being dragged by its handle to another day. While dragging, every day gets a
+    // row (empty ones are slim drop targets) so any day can be chosen.
+    var drag by remember { mutableStateOf<ScheduleDrag?>(null) }
+    val dragging = drag != null
+    val rows = remember(events, from, to, first, dragging) {
         val byDay = HashMap<LocalDate, MutableList<Instance>>()
         events.orEmpty().forEach { i -> datesOf(i, from, to, zone).forEach { byDay.getOrPut(it) { mutableListOf() } += i } }
         buildList {
@@ -87,7 +108,7 @@ fun ScheduleView(vm: AppViewModel) {
                 val ws = d.startOfWeek(first)
                 if (ws != lastWeek) { add(WeekLabel(maxOf(ws, ym.atDay(1)))); lastWeek = ws }
                 val list = byDay[d]
-                if (!list.isNullOrEmpty() || d == today) {
+                if (!list.isNullOrEmpty() || d == today || dragging) {
                     // All-day entries first (and multi-day ones after their first day), then by start time.
                     val day = d
                     add(DayRow(d, list.orEmpty().sortedWith(compareBy<Instance> { !(it.allDay || it.startDate(zone) != day) }.thenBy { it.begin })))
@@ -119,10 +140,46 @@ fun ScheduleView(vm: AppViewModel) {
             }
     }
 
+    // Where the dragged event would land: the day row under the finger, or the next day after
+    // a week or month heading.
+    var listTop by remember { mutableFloatStateOf(0f) }
+    val target: LocalDate? = drag?.let { g ->
+        val info = list.layoutInfo
+        val y = g.pointerY - listTop
+        val hit = info.visibleItemsInfo.firstOrNull { y >= it.offset && y < it.offset + it.size } ?: return@let null
+        rows.drop(hit.index).firstOrNull { it is DayRow }?.date
+    }
+    LaunchedEffect(drag) {
+        val g = drag ?: return@LaunchedEffect
+        val edge = with(density) { 64.dp.toPx() }
+        val step = with(density) { 10.dp.toPx() }
+        while (drag === g) {
+            val y = g.pointerY - listTop
+            val h = list.layoutInfo.viewportSize.height
+            if (y < edge) list.scrollBy(-step) else if (y > h - edge) list.scrollBy(step)
+            delay(16)
+        }
+    }
+    val dragHandle: (Instance, LocalDate) -> Modifier? = { i, day ->
+        if (i.isBirthday || vm.calendars.value.firstOrNull { it.id == i.calendarId }?.writable != true) null
+        else Modifier.dragHandle(
+            onStart = { y -> drag = ScheduleDrag(i, day, y) },
+            onMove = { dy -> drag?.let { it.pointerY += dy } },
+            onEnd = {
+                val g = drag; val t = target
+                drag = null
+                if (g != null && t != null) vm.move(g.i, ChronoUnit.DAYS.between(g.fromDay, t).toInt(), 0)
+            },
+            onCancel = { drag = null },
+        )
+    }
+
     var refreshing by remember { mutableStateOf(false) }
     LaunchedEffect(refreshing) { if (refreshing) { delay(1500); refreshing = false } }
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true; vm.refresh() }, modifier = Modifier.fillMaxSize()) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("schedule"), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(state = list, userScrollEnabled = !dragging,
+            modifier = Modifier.fillMaxSize().testTag("schedule").onGloballyPositioned { listTop = it.positionInRoot().y },
+            contentPadding = PaddingValues(bottom = 96.dp)) {
             items(rows.size, key = { rows[it].key }) { idx ->
                 when (val r = rows[idx]) {
                     is MonthHeader -> MonthBanner(r.date) {
@@ -142,12 +199,55 @@ fun ScheduleView(vm: AppViewModel) {
                             modifier = Modifier.padding(start = 72.dp, top = 12.dp, bottom = 4.dp),
                         )
                     }
-                    is DayRow -> DayEvents(vm, r.date, r.events)
+                    is DayRow -> DayEvents(vm, r.date, r.events, dropHere = r.date == target, dragging = drag?.i, dragHandle = dragHandle)
                 }
+            }
+        }
+        // The dragged event follows the finger, with the day it would move to.
+        drag?.let { g ->
+            val fmt = LocalFmt.current
+            Column(
+                Modifier.offset { IntOffset(0, (g.pointerY - listTop - with(density) { 28.dp.toPx() }).roundToInt()) }
+                    .padding(start = 72.dp, end = 16.dp).fillMaxWidth().testTag("drag-ghost"),
+            ) {
+                Box(Modifier.shadow(8.dp, RoundedCornerShape(8.dp))) { ScheduleCard(vm, g.i, g.fromDay, handle = Modifier) }
+                if (target != null) Text(
+                    "Move to " + fmt.weekdayShort(target) + ", " + fmt.monthDay(target),
+                    Modifier.padding(top = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.inverseSurface)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.inverseOnSurface, fontSize = 12.sp,
+                )
             }
         }
     }
 }
+
+/** An event being dragged in Schedule; [pointerY] is in root coordinates. */
+private class ScheduleDrag(val i: Instance, val fromDay: LocalDate, y: Float) {
+    var pointerY by mutableFloatStateOf(y)
+}
+
+/**
+ * The six-dot handle's gesture: dragging starts as soon as the finger moves (no long press),
+ * and reports the finger's position in root coordinates.
+ */
+internal fun Modifier.dragHandle(onStart: (Float) -> Unit, onMove: (Float) -> Unit, onEnd: () -> Unit, onCancel: () -> Unit): Modifier =
+    composed {
+        var top by remember { mutableFloatStateOf(0f) }
+        // The gesture outlives recompositions; always call the latest callbacks (they see the current drop target).
+        val start by androidx.compose.runtime.rememberUpdatedState(onStart)
+        val move by androidx.compose.runtime.rememberUpdatedState(onMove)
+        val end by androidx.compose.runtime.rememberUpdatedState(onEnd)
+        val cancel by androidx.compose.runtime.rememberUpdatedState(onCancel)
+        this.onGloballyPositioned { top = it.positionInRoot().y }.pointerInput(Unit) {
+            detectDragGestures(
+                onDragStart = { o -> start(top + o.y) },
+                onDrag = { c, d -> c.consume(); move(d.y) },
+                onDragEnd = { end() },
+                onDragCancel = { cancel() },
+            )
+        }
+    }
 
 /** Month banner: a landscape for the month whose layers drift as the list scrolls past. */
 @Composable
@@ -166,12 +266,27 @@ private fun MonthBanner(d: LocalDate, parallax: () -> Float) {
 }
 
 @Composable
-private fun DayEvents(vm: AppViewModel, date: LocalDate, events: List<Instance>) {
+private fun DayEvents(
+    vm: AppViewModel, date: LocalDate, events: List<Instance>,
+    dropHere: Boolean = false, dragging: Instance? = null, dragHandle: ((Instance, LocalDate) -> Modifier?)? = null,
+) {
     val fmt = LocalFmt.current
     val today = date == LocalDate.now()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     if (today) LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp).testTag("day-$date")) {
+    // While dragging, an empty day is a slim row you can drop on.
+    if (events.isEmpty() && !today && dragHandle != null) {
+        Row(Modifier.fillMaxWidth().height(36.dp).padding(start = 8.dp, end = 16.dp).testTag("day-$date"), verticalAlignment = Alignment.CenterVertically) {
+            Text(fmt.weekdayShort(date) + " " + date.dayOfMonth, Modifier.width(56.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(Modifier.padding(start = 8.dp).weight(1f).height(28.dp).clip(RoundedCornerShape(8.dp))
+                .background(if (dropHere) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer))
+        }
+        return
+    }
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+        .then(if (dropHere) Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)) else Modifier)
+        .testTag("day-$date")) {
         Column(Modifier.width(56.dp).clickable { vm.selectedDate = date; vm.setView(app.crome1394.almanac.data.ViewMode.DAY) },
             horizontalAlignment = Alignment.CenterHorizontally) {
             Text(fmt.weekdayShort(date), style = MaterialTheme.typography.labelSmall,
@@ -187,7 +302,9 @@ private fun DayEvents(vm: AppViewModel, date: LocalDate, events: List<Instance>)
             var nowShown = !today
             events.forEach { i ->
                 if (!nowShown && !i.allDay && i.begin > now) { NowLine(); nowShown = true }
-                SwipeToDelete(vm, i) { ScheduleCard(vm, i, date) }
+                Box(if (dragging?.key == i.key) Modifier.alpha(0.3f) else Modifier) {
+                    SwipeToDelete(vm, i) { ScheduleCard(vm, i, date, dragHandle?.invoke(i, date)) }
+                }
             }
             if (!nowShown && events.isNotEmpty()) NowLine()
         }
@@ -204,7 +321,7 @@ private fun NowLine() {
 }
 
 @Composable
-internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
+internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate, handle: Modifier? = null) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
@@ -232,7 +349,8 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
                 .testTag("event"),
         ) {
             EventArt(theme, Color(i.color), dark, Modifier.fillMaxSize())
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(0.68f)
+            if (handle != null) DragHandle(ink, handle.align(Alignment.CenterStart))
+            Column(Modifier.padding(start = if (handle != null) 28.dp else 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp).fillMaxWidth(0.68f)
                 .then(if (i.dimmed()) Modifier.alpha(0.6f) else Modifier)) {
                 Text(i.title.ifBlank { "(No title)" }, color = ink, fontWeight = FontWeight.Medium, fontSize = 15.sp, maxLines = 2)
                 if (timeText != null) Text(timeText, color = ink.copy(alpha = 0.8f), fontSize = 12.sp)
@@ -241,13 +359,16 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
         }
         return
     }
-    Column(
-        Modifier.fillMaxWidth().clip(shape)
+    Row(
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape)
             .then(if (outlined) Modifier.background(MaterialTheme.colorScheme.surface).androidxBorder(fill, shape) else Modifier.background(fill))
             .combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.menuFor = i }) { vm.open(i) }
-            .padding(horizontal = 12.dp, vertical = if (timeText == null) 6.dp else 8.dp)
             .testTag("event"),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+    if (handle != null) DragHandle(fg, handle.fillMaxHeight())
+    Column(Modifier.weight(1f).padding(start = if (handle != null) 0.dp else 12.dp, end = 12.dp,
+        top = if (timeText == null) 6.dp else 8.dp, bottom = if (timeText == null) 6.dp else 8.dp)) {
         Text(i.title.ifBlank { "(No title)" }, color = fg, fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 2,
             textDecoration = if (i.declined) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
         if (timeText != null) {
@@ -255,6 +376,16 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
             Text(timeText, color = fg.copy(alpha = 0.9f), fontSize = 12.sp)
         }
         if (i.location.isNotBlank()) Text(placeLabel(i.location), color = fg.copy(alpha = 0.9f), fontSize = 12.sp, maxLines = 1)
+    }
+    }
+}
+
+/** The six-dot "drag to move" handle on the left of a movable event. */
+@Composable
+internal fun DragHandle(tint: Color, modifier: Modifier = Modifier, small: Boolean = false) {
+    Box(modifier.width(if (small) 14.dp else 28.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.DragIndicator, "Drag to move",
+            tint = tint.copy(alpha = 0.75f), modifier = Modifier.size(if (small) 14.dp else 20.dp).testTag("drag-handle"))
     }
 }
 

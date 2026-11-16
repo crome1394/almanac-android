@@ -303,10 +303,7 @@ private fun Grid(
                                 if (g != null) {
                                     val (dd, dm) = g.target(hourPx, colPx, dates.size)
                                     if (dd == 0 && dm == 0) vm.menuFor = g.i
-                                    else {
-                                        val from = Instant.ofEpochMilli(g.i.begin).atZone(zone)
-                                        vm.move(g.i, from.plusDays(dd.toLong()).plusMinutes(dm.toLong()).toInstant().toEpochMilli() - g.i.begin)
-                                    }
+                                    else vm.move(g.i, dd, dm)
                                 }
                             },
                             onDragCancel = { drag = null },
@@ -370,12 +367,15 @@ private fun DayColumn(
             val height = (hourDp * ((p.end - p.start).coerceAtLeast(24) / 60f)) - 1.dp
             val w = colW / p.cols
             val draggable = canDrag(i)
+            val showHandle = draggable && w * p.span >= 60.dp && height >= 24.dp
             // One gesture handler tells a tap (open), a hold (menu) and a hold-then-move (drag) apart.
             val gestures = if (draggable) Modifier.pointerInput(i.key) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume() // so the grid's tap-to-create doesn't also fire
-                    val long = awaitLongPressOrCancellation(down.id)
+                    // On the six-dot handle a drag starts at once; elsewhere after a long press.
+                    val onHandle = showHandle && down.position.x < 18.dp.toPx()
+                    val long = if (onHandle) down else awaitLongPressOrCancellation(down.id)
                     if (long == null) {
                         val up = currentEvent.changes.firstOrNull { it.id == down.id }
                         if (up != null && up.changedToUp()) { up.consume(); vm.open(i) }
@@ -387,7 +387,7 @@ private fun DayColumn(
                     if (ended) onDragEnd() else onDragCancel()
                 }
             } else Modifier
-            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, clickable = !draggable,
+            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, clickable = !draggable, handle = showHandle,
                 modifier = Modifier.offset(x = w * p.col, y = top).width(w * p.span - 2.dp).height(height)
                     .then(if (dragging?.key == i.key) Modifier.alpha(0.35f) else Modifier).then(gestures))
         }
@@ -401,21 +401,22 @@ private fun DayColumn(
 }
 
 @Composable
-private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, clickable: Boolean, modifier: Modifier) {
+private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, clickable: Boolean, handle: Boolean, modifier: Modifier) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
     val fill = eventFill(i.color, dark, i.dimmed())
     val fg = if (outlined) Color(i.color) else onEventColor(Color(i.color))
     val shape = RoundedCornerShape(6.dp)
-    Column(
+    Box(
         modifier.clip(shape)
             .then(if (outlined) Modifier.background(MaterialTheme.colorScheme.surface).androidxBorder(fill, shape) else Modifier.background(fill))
             .androidxBorder(MaterialTheme.colorScheme.surface, shape)
             .then(if (clickable) Modifier.combinedClickable(onLongClick = { vm.menuFor = i }) { vm.open(i) } else Modifier)
-            .padding(horizontal = if (compact) 3.dp else 6.dp, vertical = 2.dp)
             .testTag("event"),
     ) {
+    if (handle) DragHandle(fg, Modifier.padding(start = 1.dp, top = 3.dp), small = true)
+    Column(Modifier.padding(start = if (handle) 15.dp else if (compact) 3.dp else 6.dp, end = if (compact) 3.dp else 6.dp, top = 2.dp, bottom = 2.dp)) {
         Text(i.title.ifBlank { "(No title)" }, color = fg, fontSize = if (compact) 11.sp else 12.sp, fontWeight = FontWeight.Medium,
             maxLines = if (narrow) 1 else 3, softWrap = !narrow, lineHeight = 14.sp,
             overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
@@ -424,5 +425,6 @@ private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: B
             textDecoration = if (i.declined) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
         if (!compact) Text("${fmt.time(i.begin)} – ${fmt.time(i.end)}", color = fg.copy(alpha = 0.9f), fontSize = 11.sp, maxLines = 1)
         if (!compact && i.location.isNotBlank()) Text(i.location, color = fg.copy(alpha = 0.9f), fontSize = 11.sp, maxLines = 1)
+    }
     }
 }

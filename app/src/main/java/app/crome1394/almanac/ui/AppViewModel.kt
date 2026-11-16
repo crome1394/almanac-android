@@ -269,28 +269,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Drag to move ----
 
-    /** A recurring occurrence dragged to a new time, waiting for "this / following / all". */
-    var moveAsk by mutableStateOf<Triple<Instance, EventDetails, Long>?>(null)
+    /** A recurring occurrence dragged to a new day or time, waiting for "this / following / all". */
+    data class MoveRequest(val i: Instance, val e: EventDetails, val days: Int, val minutes: Int)
+    var moveAsk by mutableStateOf<MoveRequest?>(null)
 
-    /** Moves an occurrence dragged in the day/week grid by [shiftMs]. */
-    fun move(i: Instance, shiftMs: Long) {
-        if (shiftMs == 0L) return
+    /** Moves a dragged occurrence by [days] and [minutes] (wall-clock, in the event's own zone). */
+    fun move(i: Instance, days: Int, minutes: Int) {
+        if (days == 0 && minutes == 0) return
         viewModelScope.launch {
             val e = runCatching { repo.event(i.eventId) }.getOrNull() ?: return@launch say("This event no longer exists")
-            if (e.allDay) return@launch
-            if (e.isRecurring || e.isException) moveAsk = Triple(i, e, shiftMs) else applyMove(i, e, shiftMs, Scope.ALL)
+            val r = MoveRequest(i, e, days, if (e.allDay) 0 else minutes)
+            if (r.days == 0 && r.minutes == 0) return@launch
+            if (e.isRecurring || e.isException) moveAsk = r else applyMove(r, Scope.ALL)
         }
     }
 
-    fun applyMove(i: Instance, e: EventDetails, shiftMs: Long, scope: Scope) {
+    fun applyMove(r: MoveRequest, scope: Scope) {
+        val (i, e) = r
         val before = draftFrom(e, i.begin)
-        val moved = before.copy(
-            start = java.time.Instant.ofEpochMilli(i.begin + shiftMs).atZone(before.zone).toLocalDateTime(),
-            end = java.time.Instant.ofEpochMilli(i.end + shiftMs).atZone(before.zone).toLocalDateTime(),
-        )
+        fun shift(t: LocalDateTime) = t.plusDays(r.days.toLong()).plusMinutes(r.minutes.toLong())
+        val moved = before.copy(start = shift(before.start), end = shift(before.end))
         viewModelScope.launch {
-            val r = runCatching { repo.update(e, moved, scope, i.begin) }
-            if (r.isFailure) return@launch say("Couldn't move: " + (r.exceptionOrNull()?.message ?: "unknown error"))
+            val res = runCatching { repo.update(e, moved, scope, i.begin) }
+            if (res.isFailure) return@launch say("Couldn't move: " + (res.exceptionOrNull()?.message ?: "unknown error"))
             if (e.isRecurring || e.isException) say("Event moved")
             else _undo.tryEmit(UndoMessage("Event moved") {
                 // A one-off event goes back to where it was.
