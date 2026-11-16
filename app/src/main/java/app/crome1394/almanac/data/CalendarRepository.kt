@@ -302,7 +302,6 @@ class CalendarRepository(private val context: Context) {
             scope == Scope.THIS -> {
                 val v = d.toValues(isNew = false, asException = true).apply {
                     put(Events.ORIGINAL_INSTANCE_TIME, instanceBegin)
-                    put(Events.ORIGINAL_ALL_DAY, if (original.allDay) 1 else 0)
                     put(Events.STATUS, Events.STATUS_CONFIRMED)
                 }
                 val uri = ContentUris.withAppendedId(Events.CONTENT_EXCEPTION_URI, original.id)
@@ -348,7 +347,6 @@ class CalendarRepository(private val context: Context) {
             else -> {
                 val v = ContentValues().apply {
                     put(Events.ORIGINAL_INSTANCE_TIME, instanceBegin)
-                    put(Events.ORIGINAL_ALL_DAY, if (original.allDay) 1 else 0)
                     put(Events.STATUS, Events.STATUS_CANCELED)
                 }
                 cr.insert(ContentUris.withAppendedId(Events.CONTENT_EXCEPTION_URI, original.id), v)
@@ -517,14 +515,17 @@ data class EventDraft(
         val startMs = seriesStartMillis ?: startMillis()
         put(Events.DTSTART, startMs)
         val rule = rrule?.takeIf { it.isNotBlank() && !asException }
-        if (rule != null) {
+        if (asException) {
+            // The calendar store only accepts DTSTART + DURATION for a changed occurrence.
+            put(Events.DURATION, durationOf(endMillis() - startMillis(), allDay))
+        } else if (rule != null) {
             put(Events.RRULE, rule)
             put(Events.DURATION, durationOf(endMillis() - startMillis(), allDay))
             putNull(Events.DTEND)
         } else {
             put(Events.DTEND, startMs + (endMillis() - startMillis()))
             putNull(Events.DURATION)
-            if (!asException) { putNull(Events.RRULE); putNull(Events.RDATE); putNull(Events.EXDATE) }
+            putNull(Events.RRULE); putNull(Events.RDATE); putNull(Events.EXDATE)
         }
     }
 

@@ -102,8 +102,10 @@ fun EventDetailScreen(vm: AppViewModel, s: Screen.Detail) {
     val fmt = LocalFmt.current
 
     // Times of this occurrence (falls back to the event's own when opened without them).
-    val begin = if (s.begin != 0L) s.begin else e?.dtStart ?: 0L
-    val end = if (s.end != 0L) s.end else e?.let { it.dtEnd ?: (it.dtStart + durationMs(it.duration)) } ?: 0L
+    // A one-off event shows its stored times (they may have just been edited).
+    val ownTimes = e != null && (!e.isRecurring || s.begin == 0L)
+    val begin = if (!ownTimes) s.begin else e?.dtStart ?: 0L
+    val end = if (!ownTimes) s.end else e?.let { it.dtEnd ?: (it.dtStart + durationMs(it.duration)) } ?: 0L
 
     Scaffold(topBar = {
         TopAppBar(

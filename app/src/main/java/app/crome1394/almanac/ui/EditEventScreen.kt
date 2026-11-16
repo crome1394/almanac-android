@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -47,8 +48,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,10 +60,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -147,7 +146,8 @@ private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraf
         val draft = d.copy(title = d.title.trim())
         vm.write(
             done = if (original == null) "Event saved" else "Event updated",
-            onOk = { vm.back() },
+            // A repeating event may now be split or have a new occurrence row: go back to the calendar.
+            onOk = { if (original != null && (original.isRecurring || original.isException)) vm.home() else vm.back() },
         ) {
             try {
                 if (original == null) vm.repo.insert(draft)
@@ -375,18 +375,23 @@ private fun DateTimeRow(fmt: Fmt, t: java.time.LocalDateTime, allDay: Boolean, t
 
 @Composable
 fun PlainField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, big: Boolean = false,
-               singleLine: Boolean = true, tag: String) {
-    TextField(
+               singleLine: Boolean = true, tag: String, keyboard: KeyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+               actions: KeyboardActions = KeyboardActions.Default) {
+    val style = (if (big) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge)
+    BasicTextField(
         value, onChange,
-        placeholder = { Text(placeholder, style = if (big) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge) },
-        textStyle = if (big) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge,
+        textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
         singleLine = singleLine,
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-        ),
-        modifier = modifier.fillMaxWidth().testTag(tag),
+        keyboardOptions = keyboard,
+        keyboardActions = actions,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier.fillMaxWidth().padding(vertical = if (big) 20.dp else 10.dp).testTag(tag),
+        decorationBox = { inner ->
+            Box {
+                if (value.isEmpty()) Text(placeholder, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                inner()
+            }
+        },
     )
 }
 
@@ -405,19 +410,9 @@ private fun GuestsEditor(vm: AppViewModel, guests: List<Attendee>, cal: Calendar
         q = ""
     }
     Row_(Icons.Outlined.People) {
-        TextField(
-            q, { q = it.take(254) },
-            placeholder = { Text("Add people") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (q.isNotBlank()) add(q) }),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-            ),
-            textStyle = TextStyle.Default.merge(MaterialTheme.typography.bodyLarge),
-            modifier = Modifier.fillMaxWidth().testTag("guest-field"),
-        )
+        PlainField(q, { q = it.take(254) }, "Add people", tag = "guest-field",
+            keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+            actions = KeyboardActions(onDone = { if (q.isNotBlank()) add(q) }))
     }
     hits.forEach { h ->
         Row(Modifier.fillMaxWidth().clickable { add(h.email, h.name) }.padding(start = 56.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
