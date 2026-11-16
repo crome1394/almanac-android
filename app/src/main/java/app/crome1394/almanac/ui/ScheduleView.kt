@@ -2,6 +2,9 @@ package app.crome1394.almanac.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -184,7 +187,7 @@ private fun DayEvents(vm: AppViewModel, date: LocalDate, events: List<Instance>)
             var nowShown = !today
             events.forEach { i ->
                 if (!nowShown && !i.allDay && i.begin > now) { NowLine(); nowShown = true }
-                ScheduleCard(vm, i, date)
+                SwipeToDelete(vm, i) { ScheduleCard(vm, i, date) }
             }
             if (!nowShown && events.isNotEmpty()) NowLine()
         }
@@ -218,10 +221,11 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
         else -> "${fmt.time(i.begin)} – ${fmt.time(i.end)}"
     }
     val shape = RoundedCornerShape(8.dp)
+    val haptic = LocalHapticFeedback.current
     Column(
         Modifier.fillMaxWidth().clip(shape)
             .then(if (outlined) Modifier.background(MaterialTheme.colorScheme.surface).androidxBorder(fill, shape) else Modifier.background(fill))
-            .clickable { vm.open(i) }
+            .combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.menuFor = i }) { vm.open(i) }
             .padding(horizontal = 12.dp, vertical = if (timeText == null) 6.dp else 8.dp)
             .testTag("event"),
     ) {

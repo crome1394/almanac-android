@@ -160,7 +160,8 @@ fun EventDetailScreen(vm: AppViewModel, s: Screen.Detail) {
     if (deleteAsk && e != null) {
         DeleteDialog(e.isRecurring || e.isException, onDismiss = { deleteAsk = false }) { scope ->
             deleteAsk = false
-            vm.write("Event deleted", onOk = { vm.back() }) { vm.repo.delete(e, scope, begin) }
+            vm.back()
+            vm.deleteWithUndo(e, scope, begin)
         }
     }
 }
@@ -366,7 +367,7 @@ fun ScopeDialog(title: String, confirm: String, onDismiss: () -> Unit, allowThis
 }
 
 @Composable
-private fun DeleteDialog(recurring: Boolean, onDismiss: () -> Unit, onDelete: (Scope) -> Unit) {
+internal fun DeleteDialog(recurring: Boolean, onDismiss: () -> Unit, onDelete: (Scope) -> Unit) {
     if (recurring) ScopeDialog("Delete recurring event", "OK", onDismiss, onPick = onDelete)
     else AlertDialog(
         onDismissRequest = onDismiss,
@@ -409,7 +410,7 @@ fun durationMs(d: String?): Long = d?.let { runCatching { java.time.Duration.par
     else it.replaceFirst("P", "PT"),
 ).toMillis() }.getOrNull() } ?: 3_600_000L
 
-private fun duplicateDraft(vm: AppViewModel, e: EventDetails, begin: Long, end: Long): app.crome1394.almanac.data.EventDraft {
+internal fun duplicateDraft(vm: AppViewModel, e: EventDetails, begin: Long, end: Long): app.crome1394.almanac.data.EventDraft {
     val evZone = runCatching { ZoneId.of(e.timeZone) }.getOrDefault(ZoneId.systemDefault())
     val zone = if (e.allDay) ZoneOffset.UTC else evZone
     val s = Instant.ofEpochMilli(begin).atZone(zone).toLocalDateTime()

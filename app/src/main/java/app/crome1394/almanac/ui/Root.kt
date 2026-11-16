@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -55,6 +56,15 @@ fun AlmanacRoot(vm: AppViewModel) {
     val fmt = remember { Fmt(ctx) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(Unit) {
+        vm.undoMessages.collect { m ->
+            launch {
+                snackbar.currentSnackbarData?.dismiss()
+                val r = snackbar.showSnackbar(m.text, actionLabel = "Undo", duration = androidx.compose.material3.SnackbarDuration.Short)
+                if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) m.undo()
+            }
+        }
+    }
 
     val settings by vm.settings.collectAsStateWithLifecycle()
     CompositionLocalProvider(LocalFmt provides fmt, LocalSnackbar provides snackbar, LocalDimPast provides settings.dimPast) {
@@ -81,6 +91,7 @@ fun AlmanacRoot(vm: AppViewModel) {
                             is Screen.Import -> ImportScreen(vm, s.events)
                         }
                     }
+                    EventActionsHost(vm)
                     NotificationPermissionAsk()
                 }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 72.dp))

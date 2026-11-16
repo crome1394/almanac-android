@@ -121,7 +121,7 @@ private fun MonthCell(vm: AppViewModel, d: LocalDate, inMonth: Boolean, events: 
                 }
             }
             val shown = if (events.size > fit) (fit - 1).coerceAtLeast(0) else events.size
-            events.take(shown).forEach { i -> EventChip(i, Modifier.fillMaxWidth(), small = true) { vm.open(i) } }
+            events.take(shown).forEach { i -> EventChip(i, Modifier.fillMaxWidth(), small = true, onLongClick = { vm.menuFor = i }) { vm.open(i) } }
             if (events.size > shown) {
                 Text("+${events.size - shown}", Modifier.padding(start = 3.dp), fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)

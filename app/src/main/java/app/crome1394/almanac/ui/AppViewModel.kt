@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -212,6 +213,60 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ---- Delete with Undo ----
+
+    /** Occurrences hidden while their delete waits out the Undo snackbar. */
+    data class PendingDelete(val eventId: Long, val begin: Long, val scope: Scope)
+    class UndoMessage(val text: String, val undo: () -> Unit)
+
+    val pendingDeletes = mutableStateListOf<PendingDelete>()
+    private val _undo = MutableSharedFlow<UndoMessage>(extraBufferCapacity = 2)
+    val undoMessages: SharedFlow<UndoMessage> = _undo
+
+    /** The occurrence whose press-and-hold menu is open. */
+    var menuFor by mutableStateOf<Instance?>(null)
+    /** A recurring occurrence waiting for "this / following / all" before it is deleted. */
+    var deleteAsk by mutableStateOf<Pair<Instance, EventDetails>?>(null)
+
+    fun isPendingDelete(i: Instance): Boolean = pendingDeletes.any { p ->
+        p.eventId == i.eventId && when (p.scope) {
+            Scope.THIS -> i.begin == p.begin
+            Scope.FOLLOWING -> i.begin >= p.begin
+            Scope.ALL -> true
+        }
+    }
+
+    /**
+     * Deletes an occurrence from a list (swipe or menu): a one-off event goes at once with Undo;
+     * a recurring one first asks which occurrences ([deleteAsk]).
+     */
+    suspend fun askDelete(i: Instance) {
+        if (i.isBirthday) return say("Birthdays come from your contacts")
+        val cal = calendars.value.firstOrNull { it.id == i.calendarId }
+        if (cal?.writable != true) return say("Events in this calendar can't be changed")
+        val e = runCatching { repo.event(i.eventId) }.getOrNull() ?: return say("This event no longer exists")
+        if (e.isRecurring || e.isException) deleteAsk = i to e else deleteWithUndo(e, Scope.ALL, i.begin)
+    }
+
+    /**
+     * Hides the occurrence(s) now and deletes them once the Undo snackbar has gone. The delete
+     * runs in the app's scope, so leaving the screen doesn't cancel it; if the app is killed
+     * first, nothing is deleted.
+     */
+    fun deleteWithUndo(e: EventDetails, scope: Scope, begin: Long) {
+        val p = PendingDelete(e.id, begin, scope)
+        pendingDeletes += p
+        val job = ctx.app.scope.launch {
+            delay(UNDO_MS)
+            runCatching { repo.delete(e, scope, begin) }
+                .onFailure { say("Couldn't delete: " + (it.message ?: "unknown error")) }
+            pendingDeletes.remove(p)
+        }
+        _undo.tryEmit(UndoMessage(if (scope == Scope.THIS || !e.isRecurring) "Event deleted" else "Events deleted") {
+            if (job.isActive) { job.cancel(); pendingDeletes.remove(p) } else say("Too late to undo")
+        })
+    }
+
     fun setCalendarVisible(cal: CalendarInfo, visible: Boolean) = write { repo.setCalendarVisible(cal.id, visible) }
 
     fun respond(event: EventDetails, cal: CalendarInfo, status: Int) {
@@ -223,6 +278,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         write("Replied: $label") { repo.respond(event.id, me, status) }
     }
+
+    companion object { const val UNDO_MS = 5_000L }
 
     fun importEvents(events: List<Ics.Parsed>, cal: CalendarInfo) {
         write("Added ${events.size} event" + (if (events.size == 1) "" else "s"), onOk = { home() }) {

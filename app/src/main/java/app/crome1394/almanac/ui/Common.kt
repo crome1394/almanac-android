@@ -3,6 +3,7 @@ package app.crome1394.almanac.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +44,9 @@ import java.time.ZoneId
 @Composable
 fun rememberInstances(vm: AppViewModel, from: LocalDate, to: LocalDate): State<List<Instance>?> {
     val version by vm.dataVersion.collectAsStateWithLifecycle()
-    return produceState<List<Instance>?>(null, from, to, version) { value = vm.instances(from, to) }
+    val raw = produceState<List<Instance>?>(null, from, to, version) { value = vm.instances(from, to) }
+    // Occurrences waiting out a delete's Undo are hidden straight away.
+    return remember(raw) { androidx.compose.runtime.derivedStateOf { raw.value?.filterNot(vm::isPendingDelete) } }
 }
 
 /** Opens an occurrence: birthdays are read-only, so their detail comes from the instance itself. */
@@ -139,7 +142,7 @@ fun datesOf(i: Instance, from: LocalDate, to: LocalDate, zone: ZoneId = ZoneId.s
 
 /** An event block in Google's style: filled with the event color. */
 @Composable
-fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false, onClick: () -> Unit) {
+fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val dark = isDark()
     val fill = eventFill(i.color, dark, past = i.dimmed())
     val text = onEventColor(Color(i.color))
@@ -151,7 +154,7 @@ fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false
                     .androidxBorder(fill, shape)
                 else Modifier.background(fill),
             )
-            .clickable(onClick = onClick)
+            .combinedClickable(onLongClick = onLongClick, onClick = onClick)
             .padding(horizontal = if (small) 4.dp else 8.dp, vertical = if (small) 0.dp else 4.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
