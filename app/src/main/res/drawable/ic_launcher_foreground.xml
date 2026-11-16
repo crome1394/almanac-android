@@ -1,13 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An open almanac under a crescent moon and a few stars. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Calendar page -->
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M34,36h40a4,4 0,0 1,4 4v32a4,4 0,0 1,-4 4h-40a4,4 0,0 1,-4 -4v-32a4,4 0,0 1,4 -4z" />
-    <path android:fillColor="#1A5FB4"
-        android:pathData="M34,36h40a4,4 0,0 1,4 4v8h-48v-8a4,4 0,0 1,4 -4z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M40,31h4v10h-4z M64,31h4v10h-4z" />
-    <!-- Crescent moon, for the almanac -->
-    <path android:fillColor="#1A5FB4"
-        android:pathData="M58,54a10,10 0,1 0,6 17a8,8 0,1 1,-6 -17z" />
+    <!-- Scaled toward the middle so the launcher mask leaves some room around the art. -->
+    <group android:scaleX="0.86" android:scaleY="0.86" android:pivotX="54" android:pivotY="54">
+    <!-- Stars -->
+    <path android:fillColor="#D9FFFFFF" android:pathData="M35,38m-1.4,0a1.4,1.4 0,1 1,2.8 0a1.4,1.4 0,1 1,-2.8 0" />
+    <path android:fillColor="#B3FFFFFF" android:pathData="M74,31m-1.1,0a1.1,1.1 0,1 1,2.2 0a1.1,1.1 0,1 1,-2.2 0" />
+    <path android:fillColor="#D9FFFFFF" android:pathData="M79,45m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0" />
+    <path android:fillColor="#99FFFFFF" android:pathData="M31,50m-0.9,0a0.9,0.9 0,1 1,1.8 0a0.9,0.9 0,1 1,-1.8 0" />
+    <!-- Crescent moon -->
+    <path android:fillColor="#FFFFC94D" android:pathData="M57,23a15,15 0,1 0,13.5 23.5a12,12 0,1 1,-13.5 -23.5z" />
+    <!-- Book cover -->
+    <path android:fillColor="#FFFFB300"
+        android:pathData="M54,57.5c-8,-4.5 -17,-5.5 -26,-4.5v25.5c9,-1 18,0 26,4.5c8,-4.5 17,-5.5 26,-4.5v-25.5c-9,-1 -18,0 -26,4.5z" />
+    <!-- Pages -->
+    <path android:pathData="M54,56c-7.5,-4.3 -16,-5.3 -24,-4.3v24.5c8,-1 16.5,0 24,4.3z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="51" android:endX="0" android:endY="81">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="1" android:color="#FFDDE3F3" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M54,56c7.5,-4.3 16,-5.3 24,-4.3v24.5c-8,-1 -16.5,0 -24,4.3z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="51" android:endX="0" android:endY="81">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="1" android:color="#FFDDE3F3" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#FF9FA8DA" android:strokeWidth="1.2" android:pathData="M54,56v24.5" />
+    <path android:strokeColor="#FF9FA8DA" android:strokeWidth="1.6" android:strokeLineCap="round"
+        android:pathData="M35,60h13M35,64.5h13M35,69h9M60,60h13M60,64.5h13M60,69h9" />
+    </group>
 </vector>

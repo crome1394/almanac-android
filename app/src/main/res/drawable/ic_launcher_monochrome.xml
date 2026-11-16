@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon silhouette: the moon and the open book in one color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Scaled toward the middle so the launcher mask leaves some room around the art. -->
+    <group android:scaleX="0.86" android:scaleY="0.86" android:pivotX="54" android:pivotY="54">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M57,23a15,15 0,1 0,13.5 23.5a12,12 0,1 1,-13.5 -23.5z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M54,57.5c-8,-4.5 -17,-5.5 -26,-4.5v25.5c9,-1 18,0 26,4.5c8,-4.5 17,-5.5 26,-4.5v-25.5c-9,-1 -18,0 -26,4.5z" />
+    </group>
+</vector>
