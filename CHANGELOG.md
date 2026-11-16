@@ -37,6 +37,8 @@ First version.
 - A floating ⋮ button opens a menu above the thumb: Create event, the five
   views, Refresh and Jump to today.
 - Settings → Toolbar at the bottom, for one-handed use.
-- Search and new events open as cards over the calendar; drag the new-event
-  card's handle to resize it.
-- New app icon.
+- Search, event details, new events and edits open as cards over the
+  calendar; drag a card's handle to resize it.
+- In Schedule, slide sideways while dragging an event to change its time.
+- Jump to today always returns to today, and scrolls the grid to now.
+- New app icon: a calendar page with a crescent moon.

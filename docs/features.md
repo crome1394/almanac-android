@@ -24,8 +24,9 @@ How Almanac covers the Google Calendar app, screen by screen.
 - **Schedule:** endless list of days with events, week ranges, month banners,
   a red line at the current time, "Nothing planned" on an empty today. Swipe
   an event right to delete it (Undo for a few seconds); press and hold for
-  Open, Edit, Duplicate and Delete; drag the six-dot handle to move it to
-  another day (every day shows as a drop target while you drag).
+  Open, Edit, Duplicate and Delete; drag the six-dot handle up or down to
+  move it to another day (every day shows as a drop target while you drag)
+  and sideways to change its time.
 - **Day / 3 days / Week:** 24-hour grid. All-day and 24-hour+ events sit on
   top, overlapping events share the width, and a red line marks now. Pinch to
   zoom, swipe for the next period, tap a free slot to add an event there, tap
@@ -46,9 +47,9 @@ you can answer **Going? Yes / No / Maybe**.
 
 ## Editing
 
-A new event opens in a card from the bottom; drag its handle to make it
-taller or shorter, and tap outside to close it (unsaved changes ask first).
-Editing an existing event is full screen.
+New and existing events are edited in a card from the bottom; drag its
+handle to make it taller or shorter, and tap outside to close it (unsaved
+changes ask first). Event details open in the same kind of card.
 
 Title, calendar, all-day, start and end (changing the start keeps the length;
 an end time before the start on the same day runs past midnight), time zone,

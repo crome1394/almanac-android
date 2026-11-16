@@ -20,7 +20,7 @@ leaves the phone except through your own sync app.
 | **Views** | Schedule (illustrated months, picture cards for dinners, birthdays, flights…), Day, 3 days, Week and Month; swipe between periods, pinch to zoom, tap a free slot to add an event |
 | **Events** | Title, all-day, start/end, time zone, repeat (presets and custom rules), guests with contact suggestions, location, notifications, color, description, busy/free, visibility |
 | **Quick edits** | Drag events by their handle to a new time or day; swipe right to delete (with Undo); press and hold for a menu |
-| **One-handed** | A ⋮ menu above the thumb for creating events and switching views; toolbar at the bottom if you like; search and new events open as cards |
+| **One-handed** | A ⋮ menu above the thumb for creating events and switching views; toolbar at the bottom if you like; search, events and the editor open as cards |
 | **Repeating events** | Change or delete *this event*, *this and following* or *all events* |
 | **Invitations** | Guest list with replies; answer Yes / No / Maybe; email guests; Join button for video calls |
 | **Reminders** | Notifications with Snooze, Dismiss and Map; default reminders for timed and all-day events |

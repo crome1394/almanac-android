@@ -36,8 +36,8 @@ calendar store, and Google's sync adapter does the syncing.
   requires for that account type.
 - **Guests** are diffed against the stored list, so unchanged guests keep their
   replies.
-- **Cards.** `Screen.isOverlay` marks screens drawn as a card (search, a new
-  event). The root draws the last ordinary screen in the stack and the overlay
+- **Cards.** `Screen.isOverlay` marks screens drawn as a card (search, event
+  details, the editor). The root draws the last ordinary screen in the stack and the overlay
   above it, so the calendar stays visible underneath.
 - **Deletes wait for Undo.** A delete hides the occurrence at once and runs
   five seconds later in the application's scope, so leaving the screen doesn't
