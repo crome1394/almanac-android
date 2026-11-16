@@ -2,6 +2,8 @@ package app.crome1394.almanac.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
+import app.crome1394.almanac.data.EventTheme
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -123,7 +125,13 @@ fun ScheduleView(vm: AppViewModel) {
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("schedule"), contentPadding = PaddingValues(bottom = 96.dp)) {
             items(rows.size, key = { rows[it].key }) { idx ->
                 when (val r = rows[idx]) {
-                    is MonthHeader -> MonthBanner(r.date)
+                    is MonthHeader -> MonthBanner(r.date) {
+                        // -1 at the bottom of the list, 0 in the middle, 1 at the top.
+                        val info = list.layoutInfo
+                        val item = info.visibleItemsInfo.firstOrNull { it.index == idx } ?: return@MonthBanner 0f
+                        val vh = (info.viewportEndOffset - info.viewportStartOffset).coerceAtLeast(1)
+                        -((item.offset + item.size / 2f) - vh / 2f) / (vh / 2f)
+                    }
                     is WeekLabel -> {
                         val end = minOf(r.date.startOfWeek(first).plusDays(6), YearMonth.from(r.date).atEndOfMonth())
                         val fmt = LocalFmt.current
@@ -141,28 +149,20 @@ fun ScheduleView(vm: AppViewModel) {
     }
 }
 
-/** Month banner. Google uses illustrations; this is a gradient tinted by season. */
+/** Month banner: a landscape for the month whose layers drift as the list scrolls past. */
 @Composable
-private fun MonthBanner(d: LocalDate) {
+private fun MonthBanner(d: LocalDate, parallax: () -> Float) {
     val fmt = LocalFmt.current
-    val (a, b) = seasonColors(d.monthValue, isDark())
+    val dark = isDark()
     Box(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp).height(88.dp)
-            .clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(a, b))),
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp).height(128.dp)
+            .clip(RoundedCornerShape(16.dp)).testTag("month-banner"),
     ) {
-        Text(fmt.monthYear(d), Modifier.align(Alignment.BottomStart).padding(16.dp),
-            style = MaterialTheme.typography.titleLarge, color = if (isDark()) Color.White else Color(0xFF1F1F1F))
+        MonthScene(d.monthValue, dark, parallax, Modifier.fillMaxSize())
+        Text(fmt.monthYear(d), Modifier.align(Alignment.TopStart).padding(horizontal = 16.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium,
+            color = if (dark || d.monthValue == 12) Color.White else Color(0xFF1F1F1F))
     }
-}
-
-private fun seasonColors(month: Int, dark: Boolean): Pair<Color, Color> {
-    val pair = when (month) {
-        12, 1, 2 -> Color(0xFFD3E3FD) to Color(0xFFE8F0FE)
-        3, 4, 5 -> Color(0xFFCEEAD6) to Color(0xFFFEF7E0)
-        6, 7, 8 -> Color(0xFFFEEFC3) to Color(0xFFFAD2CF)
-        else -> Color(0xFFFAD2CF) to Color(0xFFFEEFC3)
-    }
-    return if (dark) lerpColor(pair.first, Color(0xFF131314), 0.7f) to lerpColor(pair.second, Color(0xFF131314), 0.75f) else pair
 }
 
 @Composable
@@ -222,6 +222,25 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
     }
     val shape = RoundedCornerShape(8.dp)
     val haptic = LocalHapticFeedback.current
+    val theme = remember(i.title) { if (i.isBirthday) EventTheme.BIRTHDAY else EventTheme.of(i.title) }
+    if (theme != null && !outlined) {
+        // A picture card, as Google draws for dinners, birthdays, flights and so on.
+        val ink = if (dark) Color.White else Color(0xFF1F1F1F)
+        Box(
+            Modifier.fillMaxWidth().height(96.dp).clip(shape)
+                .combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.menuFor = i }) { vm.open(i) }
+                .testTag("event"),
+        ) {
+            EventArt(theme, Color(i.color), dark, Modifier.fillMaxSize())
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(0.68f)
+                .then(if (i.dimmed()) Modifier.alpha(0.6f) else Modifier)) {
+                Text(i.title.ifBlank { "(No title)" }, color = ink, fontWeight = FontWeight.Medium, fontSize = 15.sp, maxLines = 2)
+                if (timeText != null) Text(timeText, color = ink.copy(alpha = 0.8f), fontSize = 12.sp)
+                if (i.location.isNotBlank()) Text(i.location, color = ink.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
+            }
+        }
+        return
+    }
     Column(
         Modifier.fillMaxWidth().clip(shape)
             .then(if (outlined) Modifier.background(MaterialTheme.colorScheme.surface).androidxBorder(fill, shape) else Modifier.background(fill))

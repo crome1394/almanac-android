@@ -1,5 +1,7 @@
 package app.crome1394.almanac.ui
 
+import androidx.compose.animation.togetherWith
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -121,7 +123,16 @@ fun MainScreen(vm: AppViewModel) {
                                     .testTag("month-title"),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(fmt.monthTitle(vm.selectedDate), style = MaterialTheme.typography.titleLarge)
+                                // The month name rolls up or down as the calendar crosses into another month.
+                                androidx.compose.animation.AnimatedContent(
+                                    targetState = java.time.YearMonth.from(vm.selectedDate),
+                                    transitionSpec = {
+                                        val dir = if (targetState > initialState) 1 else -1
+                                        (androidx.compose.animation.slideInVertically { it * dir } + androidx.compose.animation.fadeIn()) togetherWith
+                                            (androidx.compose.animation.slideOutVertically { -it * dir } + androidx.compose.animation.fadeOut())
+                                    },
+                                    label = "month-title",
+                                ) { ym -> Text(fmt.monthTitle(ym.atDay(1)), style = MaterialTheme.typography.titleLarge) }
                                 if (canPick) {
                                     val rot by animateFloatAsState(if (miniMonth) 180f else 0f, label = "arrow")
                                     Icon(Icons.Filled.ArrowDropDown, null, Modifier.rotate(rot))

@@ -3,5 +3,7 @@
     <application>
         <!-- Debug builds only: fills a phone-only calendar with made-up events for testing. -->
         <receiver android:name=".DemoSeeder" android:exported="true" />
+        <!-- Debug builds only: all the artwork on one screen. -->
+        <activity android:name=".ArtGallery" android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
     </application>
 </manifest>
