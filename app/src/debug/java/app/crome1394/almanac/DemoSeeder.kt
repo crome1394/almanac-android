@@ -22,9 +22,17 @@ class DemoSeeder : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         thread {
-            try { runBlocking { seed(context.applicationContext) } } catch (e: Exception) { Log.e("Almanac", "seed failed", e) }
+            try { runBlocking { if (intent.hasExtra("soon")) soon(context.applicationContext) else seed(context.applicationContext) } } catch (e: Exception) { Log.e("Almanac", "seed failed", e) }
             finally { pending.finish() }
         }
+    }
+
+    /** `--ez soon true`: an event two minutes from now with a one-minute reminder, to test notifications. */
+    private suspend fun soon(c: Context) {
+        val cal = c.app.repo.calendars().first { it.isLocal }
+        val start = java.time.LocalDateTime.now().plusMinutes(2).withSecond(0).withNano(0)
+        c.app.repo.insert(EventDraft(calendarId = cal.id, title = "Reminder test", start = start, end = start.plusMinutes(30),
+            location = "Test room", reminders = listOf(Reminder(1, Reminders.METHOD_ALERT))))
     }
 
     private suspend fun seed(c: Context) {
