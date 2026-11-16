@@ -205,7 +205,7 @@ private fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
-    val fill = eventFill(i.color, dark, i.isPast())
+    val fill = eventFill(i.color, dark, i.dimmed())
     val fg = if (outlined) Color(i.color) else onEventColor(Color(i.color))
     val zone = ZoneId.systemDefault()
     val timeText = when {

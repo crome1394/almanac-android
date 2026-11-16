@@ -50,6 +50,12 @@ fun rememberInstances(vm: AppViewModel, from: LocalDate, to: LocalDate): State<L
 fun AppViewModel.open(i: Instance) =
     push(Screen.Detail(i.eventId, i.begin, i.end, if (i.isBirthday) i else null))
 
+/** Past events are drawn faded unless the "Dim past events" setting is off. */
+val LocalDimPast = androidx.compose.runtime.compositionLocalOf { true }
+
+@Composable
+fun Instance.dimmed(): Boolean = LocalDimPast.current && isPast()
+
 fun Instance.isPast(now: Long = System.currentTimeMillis()): Boolean = end <= now && !(allDay && covers(LocalDate.now()))
 
 @Composable
@@ -135,7 +141,7 @@ fun datesOf(i: Instance, from: LocalDate, to: LocalDate, zone: ZoneId = ZoneId.s
 @Composable
 fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false, onClick: () -> Unit) {
     val dark = isDark()
-    val fill = eventFill(i.color, dark, past = i.isPast())
+    val fill = eventFill(i.color, dark, past = i.dimmed())
     val text = onEventColor(Color(i.color))
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (small) 4.dp else 6.dp)
     Box(
@@ -151,7 +157,7 @@ fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false
     ) {
         Text(
             i.title.ifBlank { "(No title)" },
-            color = if (i.tentative || i.declined) Color(i.color) else text.copy(alpha = if (i.isPast()) 0.85f else 1f),
+            color = if (i.tentative || i.declined) Color(i.color) else text.copy(alpha = if (i.dimmed()) 0.85f else 1f),
             fontSize = if (small) 11.sp else 13.sp,
             lineHeight = if (small) 13.sp else 18.sp,
             softWrap = false,

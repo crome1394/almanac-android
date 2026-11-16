@@ -277,7 +277,7 @@ private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: B
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
-    val fill = eventFill(i.color, dark, i.isPast())
+    val fill = eventFill(i.color, dark, i.dimmed())
     val fg = if (outlined) Color(i.color) else onEventColor(Color(i.color))
     val shape = RoundedCornerShape(6.dp)
     Column(

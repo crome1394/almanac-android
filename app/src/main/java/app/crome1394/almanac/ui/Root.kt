@@ -31,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -54,7 +56,8 @@ fun AlmanacRoot(vm: AppViewModel) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
 
-    CompositionLocalProvider(LocalFmt provides fmt, LocalSnackbar provides snackbar) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    CompositionLocalProvider(LocalFmt provides fmt, LocalSnackbar provides snackbar, LocalDimPast provides settings.dimPast) {
         Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }, color = MaterialTheme.colorScheme.surface) {
             Box(Modifier.fillMaxSize()) {
                 if (!vm.hasCalendarPermission) {
