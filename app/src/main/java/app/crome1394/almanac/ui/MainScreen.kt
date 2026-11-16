@@ -154,7 +154,9 @@ fun MainScreen(vm: AppViewModel) {
         ) { pad ->
             Box(Modifier.padding(pad).fillMaxSize()) {
                 val cals by vm.calendars.collectAsStateWithLifecycle()
-                if (cals.isEmpty()) {
+                if (!vm.calendarsLoaded) {
+                    // Nothing yet: the list arrives in a moment.
+                } else if (cals.isEmpty()) {
                     NoCalendars(onAdd = { addCalendar = true })
                 } else when (settings.viewMode) {
                     ViewMode.SCHEDULE -> ScheduleView(vm)

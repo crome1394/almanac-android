@@ -70,6 +70,7 @@ object Widgets {
             delay(1500)
             runCatching { ScheduleWidget().updateAll(ctx) }
             runCatching { MonthWidget().updateAll(ctx) }
+            runCatching { WidgetRefresh.arm(ctx) }
         }
     }
 
@@ -103,10 +104,12 @@ object Widgets {
 
 class ScheduleWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = ScheduleWidget()
+    override fun onEnabled(context: Context) { super.onEnabled(context); Widgets.refresh(context) }
 }
 
 class MonthWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = MonthWidget()
+    override fun onEnabled(context: Context) { super.onEnabled(context); Widgets.refresh(context) }
 }
 
 private sealed interface WRow

@@ -69,9 +69,9 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
-    implementation(libs.navigation.compose)
     implementation(libs.coroutines.android)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    implementation(libs.work.runtime)
     testImplementation(libs.junit)
 }

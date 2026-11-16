@@ -67,6 +67,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var hasCalendarPermission by mutableStateOf(Permissions.hasCalendar(ctx))
         private set
 
+    /** False until the calendar list has been read once (so "no calendars" doesn't flash). */
+    var calendarsLoaded by mutableStateOf(false)
+        private set
     private val _calendars = MutableStateFlow<List<CalendarInfo>>(emptyList())
     val calendars: StateFlow<List<CalendarInfo>> = _calendars.asStateFlow()
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -102,6 +105,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun reloadCalendars() {
         if (!hasCalendarPermission) return
         _calendars.value = runCatching { repo.calendars() }.getOrDefault(emptyList())
+        calendarsLoaded = true
     }
 
     fun say(msg: String) { _messages.tryEmit(msg) }
