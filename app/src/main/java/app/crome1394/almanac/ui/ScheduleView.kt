@@ -83,7 +83,9 @@ fun ScheduleView(vm: AppViewModel) {
                 if (ws != lastWeek) { add(WeekLabel(maxOf(ws, ym.atDay(1)))); lastWeek = ws }
                 val list = byDay[d]
                 if (!list.isNullOrEmpty() || d == today) {
-                    add(DayRow(d, list.orEmpty().sortedWith(compareBy<Instance> { !(it.allDay || it.isMultiDayTimed(zone)) }.thenBy { it.begin })))
+                    // All-day entries first (and multi-day ones after their first day), then by start time.
+                    val day = d
+                    add(DayRow(d, list.orEmpty().sortedWith(compareBy<Instance> { !(it.allDay || it.startDate(zone) != day) }.thenBy { it.begin })))
                 }
                 d = d.plusDays(1)
             }
