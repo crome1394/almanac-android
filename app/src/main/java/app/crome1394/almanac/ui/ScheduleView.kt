@@ -167,15 +167,17 @@ fun ScheduleView(vm: AppViewModel) {
             delay(16)
         }
     }
+    // Sliding sideways while dragging changes the time (see ScheduleDrag.minutes).
+    val screenW = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp.toPx() }
     val dragHandle: (Instance, LocalDate) -> Modifier? = { i, day ->
         if (i.isBirthday || vm.calendars.value.firstOrNull { it.id == i.calendarId }?.writable != true) null
         else Modifier.dragHandle(
-            onStart = { y -> drag = ScheduleDrag(i, day, y) },
-            onMove = { dy -> drag?.let { it.pointerY += dy } },
+            onStart = { x, y -> drag = ScheduleDrag(i, day, x, y) },
+            onMove = { dx, dy -> drag?.let { it.pointerY += dy; it.pointerX += dx } },
             onEnd = {
                 val g = drag; val t = target
                 drag = null
-                if (g != null && t != null) vm.move(g.i, ChronoUnit.DAYS.between(g.fromDay, t).toInt(), 0)
+                if (g != null && t != null) vm.move(g.i, ChronoUnit.DAYS.between(g.fromDay, t).toInt(), g.minutes(screenW))
             },
             onCancel = { drag = null },
         )
@@ -217,39 +219,71 @@ fun ScheduleView(vm: AppViewModel) {
                 Modifier.offset { IntOffset(0, (g.pointerY - listTop - with(density) { 28.dp.toPx() }).roundToInt()) }
                     .padding(start = 72.dp, end = 16.dp).fillMaxWidth().testTag("drag-ghost"),
             ) {
-                Box(Modifier.shadow(8.dp, RoundedCornerShape(8.dp))) { ScheduleCard(vm, g.i, g.fromDay, handle = Modifier) }
-                if (target != null) Text(
-                    "Move to " + fmt.weekdayShort(target) + ", " + fmt.monthDay(target),
-                    Modifier.padding(top = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.inverseSurface)
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.inverseOnSurface, fontSize = 12.sp,
-                )
+                // The floating copy shows the time it would get.
+                val shift = g.minutes(screenW) * 60_000L
+                Box(Modifier.shadow(8.dp, RoundedCornerShape(8.dp))) {
+                    ScheduleCard(vm, g.i.copy(begin = g.i.begin + shift, end = g.i.end + shift), g.fromDay, handle = Modifier)
+                }
+                if (target != null) {
+                    val m = g.minutes(screenW)
+                    val begin = g.i.begin + m * 60_000L
+                    val time = if (g.i.allDay) "" else " · " + fmt.time(begin) + " – " + fmt.time(begin + (g.i.end - g.i.begin))
+                    Column(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.inverseSurface)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)) {
+                        Text("Move to " + fmt.weekdayShort(target) + ", " + fmt.monthDay(target) + time,
+                            color = MaterialTheme.colorScheme.inverseOnSurface, fontSize = 12.sp, modifier = Modifier.testTag("drag-label"))
+                        if (!g.i.allDay) Text("Slide left for earlier, right for later",
+                            color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f), fontSize = 11.sp)
+                    }
+                }
             }
         }
     }
 }
 
 /** An event being dragged in Schedule; [pointerY] is in root coordinates. */
-private class ScheduleDrag(val i: Instance, val fromDay: LocalDate, y: Float) {
+private class ScheduleDrag(val i: Instance, val fromDay: LocalDate, val startX: Float, y: Float) {
     var pointerY by mutableFloatStateOf(y)
+    var pointerX by mutableFloatStateOf(startX)
+    private val startMin = java.time.Instant.ofEpochMilli(i.begin).atZone(ZoneId.systemDefault()).toLocalTime().let { it.hour * 60 + it.minute }
+
+    /**
+     * Minutes the time moves, in 15-minute steps. From where the finger started, the left edge
+     * of the screen is midnight and the right edge is 23:45, so any time can be reached from a
+     * handle at the left. All-day events keep their dates whole.
+     */
+    fun minutes(screenW: Float, dead: Float = screenW / 12): Int {
+        if (i.allDay) return 0
+        // Sideways wobble while dragging up or down leaves the time alone.
+        val raw = pointerX.coerceIn(0f, screenW)
+        val x = when {
+            kotlin.math.abs(raw - startX) < dead -> startX
+            raw > startX -> startX + (raw - startX - dead) * (screenW - startX) / (screenW - startX - dead).coerceAtLeast(1f)
+            else -> startX - (startX - raw - dead) * startX / (startX - dead).coerceAtLeast(1f)
+        }.coerceIn(0f, screenW)
+        val target = if (x <= startX) startMin * (x / startX.coerceAtLeast(1f))
+        else startMin + (1425 - startMin) * ((x - startX) / (screenW - startX).coerceAtLeast(1f))
+        return Math.round(target / 15f) * 15 - startMin
+    }
 }
 
 /**
  * The six-dot handle's gesture: dragging starts as soon as the finger moves (no long press),
  * and reports the finger's position in root coordinates.
  */
-internal fun Modifier.dragHandle(onStart: (Float) -> Unit, onMove: (Float) -> Unit, onEnd: () -> Unit, onCancel: () -> Unit): Modifier =
+internal fun Modifier.dragHandle(onStart: (Float, Float) -> Unit, onMove: (Float, Float) -> Unit, onEnd: () -> Unit, onCancel: () -> Unit): Modifier =
     composed {
         var top by remember { mutableFloatStateOf(0f) }
+        var left by remember { mutableFloatStateOf(0f) }
         // The gesture outlives recompositions; always call the latest callbacks (they see the current drop target).
         val start by androidx.compose.runtime.rememberUpdatedState(onStart)
         val move by androidx.compose.runtime.rememberUpdatedState(onMove)
         val end by androidx.compose.runtime.rememberUpdatedState(onEnd)
         val cancel by androidx.compose.runtime.rememberUpdatedState(onCancel)
-        this.onGloballyPositioned { top = it.positionInRoot().y }.pointerInput(Unit) {
+        this.onGloballyPositioned { it.positionInRoot().let { p -> top = p.y; left = p.x } }.pointerInput(Unit) {
             detectDragGestures(
-                onDragStart = { o -> start(top + o.y) },
-                onDrag = { c, d -> c.consume(); move(d.y) },
+                onDragStart = { o -> start(left + o.x, top + o.y) },
+                onDrag = { c, d -> c.consume(); move(d.x, d.y) },
                 onDragEnd = { end() },
                 onDragCancel = { cancel() },
             )
