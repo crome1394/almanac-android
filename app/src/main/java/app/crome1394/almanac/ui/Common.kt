@@ -139,19 +139,22 @@ fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false
     val text = onEventColor(Color(i.color))
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (small) 4.dp else 6.dp)
     Box(
-        modifier.clip(shape)
+        modifier.then(if (small) Modifier.height(17.dp) else Modifier).clip(shape)
             .then(
                 if (i.tentative || i.declined) Modifier.background(MaterialTheme.colorScheme.surface)
                     .androidxBorder(fill, shape)
                 else Modifier.background(fill),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = if (small) 4.dp else 8.dp, vertical = if (small) 1.dp else 4.dp),
+            .padding(horizontal = if (small) 4.dp else 8.dp, vertical = if (small) 0.dp else 4.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
         Text(
             i.title.ifBlank { "(No title)" },
             color = if (i.tentative || i.declined) Color(i.color) else text.copy(alpha = if (i.isPast()) 0.85f else 1f),
             fontSize = if (small) 11.sp else 13.sp,
+            lineHeight = if (small) 13.sp else 18.sp,
+            softWrap = false,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             textDecoration = if (i.declined) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,

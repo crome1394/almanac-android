@@ -102,8 +102,8 @@ private fun MonthCell(vm: AppViewModel, d: LocalDate, inMonth: Boolean, events: 
     BoxWithConstraints(
         modifier.clickable { vm.selectedDate = d; vm.setView(ViewMode.DAY) }.testTag("cell-$d"),
     ) {
-        // Each chip is ~16dp; the date takes ~24dp.
-        val fit = ((maxHeight.value - 26f) / 17f).toInt().coerceAtLeast(0)
+        // Each chip is 17dp plus 1dp spacing; the date takes 26dp.
+        val fit = ((maxHeight.value - 28f) / 18f).toInt().coerceAtLeast(0)
         Column(Modifier.fillMaxSize().padding(horizontal = 1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Box(Modifier.fillMaxWidth().padding(top = 3.dp), contentAlignment = Alignment.Center) {
                 Box(
