@@ -63,6 +63,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -88,8 +90,8 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventDetailScreen(vm: AppViewModel, s: Screen.Detail) {
-    if (s.instance != null) { BirthdayDetail(vm, s.instance); return }
+fun EventDetailScreen(vm: AppViewModel, s: Screen.Detail, inCard: Boolean = false) {
+    if (s.instance != null) { BirthdayDetail(vm, s.instance, inCard); return }
     val version by vm.dataVersion.collectAsStateWithLifecycle()
     val cals by vm.calendars.collectAsStateWithLifecycle()
     val loaded by produceState<Pair<Boolean, EventDetails?>>(false to null, s.eventId, version) {
@@ -108,8 +110,12 @@ fun EventDetailScreen(vm: AppViewModel, s: Screen.Detail) {
     val begin = if (!ownTimes) s.begin else e?.dtStart ?: 0L
     val end = if (!ownTimes) s.end else e?.let { it.dtEnd ?: (it.dtStart + durationMs(it.duration)) } ?: 0L
 
-    Scaffold(topBar = {
+    Scaffold(
+        contentWindowInsets = cardInsets(inCard), containerColor = cardColor(inCard),
+        topBar = {
         TopAppBar(
+            windowInsets = if (inCard) WindowInsets(0, 0, 0, 0) else TopAppBarDefaults.windowInsets,
+            colors = if (inCard) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors(),
             title = {},
             navigationIcon = { IconButton(onClick = { vm.back() }, Modifier.testTag("close")) { Icon(Icons.Filled.Close, "Close") } },
             actions = {
@@ -388,11 +394,13 @@ internal fun DeleteDialog(recurring: Boolean, onDismiss: () -> Unit, onDelete: (
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BirthdayDetail(vm: AppViewModel, i: Instance) {
+private fun BirthdayDetail(vm: AppViewModel, i: Instance, inCard: Boolean) {
     val ctx = LocalContext.current
     val fmt = LocalFmt.current
-    Scaffold(topBar = {
-        TopAppBar(title = {}, navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.Filled.Close, "Close") } })
+    Scaffold(contentWindowInsets = cardInsets(inCard), containerColor = cardColor(inCard), topBar = {
+        TopAppBar(title = {}, navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.Filled.Close, "Close") } },
+            windowInsets = if (inCard) WindowInsets(0, 0, 0, 0) else TopAppBarDefaults.windowInsets,
+            colors = if (inCard) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors())
     }) { pad ->
         Column(Modifier.padding(pad)) {
             InfoRow(Icons.Outlined.Cake) {
@@ -435,3 +443,11 @@ internal fun duplicateDraft(vm: AppViewModel, e: EventDetails, begin: Long, end:
         organizer = cal?.ownerAccount,
     )
 }
+
+/** In a card the system bars are the card's business, not the screen's. */
+@Composable
+internal fun cardInsets(inCard: Boolean): WindowInsets =
+    if (inCard) WindowInsets(0, 0, 0, 0) else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets
+
+@Composable
+internal fun cardColor(inCard: Boolean): Color = if (inCard) Color.Transparent else MaterialTheme.colorScheme.background

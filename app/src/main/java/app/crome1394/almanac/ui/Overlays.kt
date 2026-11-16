@@ -43,14 +43,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 /** Screens drawn as a card over the one below instead of replacing it. */
-val Screen.isOverlay: Boolean get() = this is Screen.Search || (this is Screen.Edit && request.draft != null)
+val Screen.isOverlay: Boolean get() = this is Screen.Search || this is Screen.Edit || this is Screen.Detail
 
-/** Height of the new-event card as a share of the screen, kept while the app runs. */
-private var editorCardShare by mutableFloatStateOf(0.62f)
+/** Heights of the event and editor cards as a share of the screen, kept while the app runs. */
+private val editorCardShare = mutableFloatStateOf(0.62f)
+private val detailCardShare = mutableFloatStateOf(0.55f)
 
 /**
- * Draws [s] as a card: search floats at the top (or bottom, with the toolbar there); a new
- * event opens in a card from the bottom whose height you drag by its handle.
+ * Draws [s] as a card: search floats at the top (or bottom, with the toolbar there); an
+ * event, and the editor, open in a card from the bottom whose height you drag by its handle.
  */
 @Composable
 fun OverlayHost(vm: AppViewModel, s: Screen?) {
@@ -85,12 +86,13 @@ fun OverlayHost(vm: AppViewModel, s: Screen?) {
                     ) { SearchCard(vm, fieldAtBottom = fromBottom) }
                 }
             }
-            is Screen.Edit -> {
+            is Screen.Edit, is Screen.Detail -> {
                 AnimatedVisibility(
                     visible, enter = slideInVertically { it }, exit = slideOutVertically { it },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
-                    ResizableCard { EditEventScreen(vm, shown.request, inCard = true) }
+                    if (shown is Screen.Edit) ResizableCard(editorCardShare, "editor-card") { EditEventScreen(vm, shown.request, inCard = true) }
+                    else if (shown is Screen.Detail) ResizableCard(detailCardShare, "detail-card") { EventDetailScreen(vm, shown, inCard = true) }
                 }
             }
             else -> {}
@@ -100,9 +102,10 @@ fun OverlayHost(vm: AppViewModel, s: Screen?) {
 
 private class Holder<T>(var value: T)
 
-/** A card anchored to the bottom; drag its handle to make it taller or shorter. */
+/** A card anchored to the bottom; drag its handle to make it taller or shorter ([share] of the screen). */
 @Composable
-private fun ResizableCard(content: @Composable () -> Unit) {
+private fun ResizableCard(share: androidx.compose.runtime.MutableFloatState, tag: String, content: @Composable () -> Unit) {
+    var editorCardShare by share
     val screenH = LocalConfiguration.current.screenHeightDp.dp
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding().windowInsetsPadding(WindowInsets.ime)) {
         val maxH = maxHeight
@@ -110,7 +113,7 @@ private fun ResizableCard(content: @Composable () -> Unit) {
         val h = (screenH * editorCardShare).coerceAtMost(maxH)
         Surface(
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), tonalElevation = 1.dp, shadowElevation = 12.dp,
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(h).testTag("editor-card"),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(h).testTag(tag),
         ) {
             Column(Modifier.navigationBarsPadding()) {
                 Box(
