@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon silhouette: the moon and the open book in one color. -->
+<!-- Themed-icon silhouette: the calendar page with its days cut out (one day left solid). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Scaled toward the middle so the launcher mask leaves some room around the art. -->
-    <group android:scaleX="0.86" android:scaleY="0.86" android:pivotX="54" android:pivotY="54">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M57,23a15,15 0,1 0,13.5 23.5a12,12 0,1 1,-13.5 -23.5z" />
-    <path android:fillColor="#FFFFFFFF"
-        android:pathData="M54,57.5c-8,-4.5 -17,-5.5 -26,-4.5v25.5c9,-1 18,0 26,4.5c8,-4.5 17,-5.5 26,-4.5v-25.5c-9,-1 -18,0 -26,4.5z" />
+    <group android:scaleX="0.92" android:scaleY="0.92" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M36,30h36a8,8 0,0 1,8,8v34a8,8 0,0 1,-8,8h-36a8,8 0,0 1,-8,-8v-34a8,8 0,0 1,8,-8zM36.0,52h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM46.5,52h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM57.0,52h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM67.5,52h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM36.0,61h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM57.0,61h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM67.5,61h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM36.0,70h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM46.5,70h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM57.0,70h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2zM67.5,70h3.5a2,2 0,0 1,2,2v2a2,2 0,0 1,-2,2h-3.5a2,2 0,0 1,-2,-2v-2a2,2 0,0 1,2,-2z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M40.5,25h0.0a2.5,2.5 0,0 1,2.5,2.5v6.0a2.5,2.5 0,0 1,-2.5,2.5h-0.0a2.5,2.5 0,0 1,-2.5,-2.5v-6.0a2.5,2.5 0,0 1,2.5,-2.5zM67.5,25h0.0a2.5,2.5 0,0 1,2.5,2.5v6.0a2.5,2.5 0,0 1,-2.5,2.5h-0.0a2.5,2.5 0,0 1,-2.5,-2.5v-6.0a2.5,2.5 0,0 1,2.5,-2.5z" />
     </group>
 </vector>
