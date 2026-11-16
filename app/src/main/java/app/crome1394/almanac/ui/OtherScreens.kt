@@ -89,9 +89,28 @@ fun SearchScreen(vm: AppViewModel) {
         when {
             list == null -> {}
             list.isEmpty() -> Text("No results", Modifier.padding(pad).padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            else -> LazyColumn(Modifier.padding(pad).fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+            else -> {
+              // Start at the first result from today on, as Google does; older ones are above.
+              val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+              LaunchedEffect(list) {
+                  val days = list.map { it.startDate(zone) }.distinct().sorted()
+                  val first = days.firstOrNull { it >= java.time.LocalDate.now() } ?: days.lastOrNull()
+                  // Each day is one item, plus one heading per month up to and including that day.
+                  val idx = if (first == null) 0 else days.indexOf(first) + days.filter { it <= first }.map { it.withDayOfMonth(1) }.distinct().size - 1
+                  if (idx > 0) listState.scrollToItem(idx)
+              }
+              LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
                 val byDay = list.groupBy { it.startDate(zone) }.toSortedMap()
+                var lastMonth: java.time.YearMonth? = null
                 byDay.forEach { (day, events) ->
+                    val ym = java.time.YearMonth.from(day)
+                    if (ym != lastMonth) {
+                        lastMonth = ym
+                        item(key = "m$ym") {
+                            Text(fmt.monthYear(day), Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+                                style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                     item(key = "d$day") {
                         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 8.dp)) {
                             Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -107,6 +126,7 @@ fun SearchScreen(vm: AppViewModel) {
                         }
                     }
                 }
+            }
             }
         }
     }
