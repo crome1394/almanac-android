@@ -105,6 +105,12 @@ class DemoSeeder : BroadcastReceiver() {
                 copy(allDay = true, end = today.plusDays(9).atStartOfDay(), rrule = "FREQ=YEARLY")
             },
             ev(work, "Late deploy", today.plusDays(2), LocalTime.of(22, 0), LocalTime.of(1, 0)) { copy(end = today.plusDays(3).atTime(1, 0)) },
+            ev(work, "Weekly sync", today.plusDays(1), LocalTime.of(11, 0), LocalTime.of(11, 30)) {
+                copy(location = "https://meet.jit.si/AlmanacDemo", rrule = "FREQ=WEEKLY")
+            },
+            ev(personal, "Dinner with Sam", today.plusDays(2), LocalTime.of(19, 30), LocalTime.of(21, 30)) { copy(location = "Luigi's") },
+            ev(personal, "Flight to Lisbon", today.plusDays(3), LocalTime.of(7, 10), LocalTime.of(9, 40)) { copy(colorKey = "Lavender") },
+            ev(personal, "Alex's birthday party", today.plusDays(6), LocalTime.of(15, 0), LocalTime.of(18, 0)) { copy(colorKey = "Flamingo") },
             ev(personal, "Book club", today.minusDays(3), LocalTime.of(19, 30), LocalTime.of(21, 0)) { copy(rrule = "FREQ=MONTHLY;BYDAY=3TH") },
         )
         list.forEach { repo.insert(it) }

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Work
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -191,6 +192,14 @@ private fun Details(vm: AppViewModel, e: EventDetails, cal: app.crome1394.almana
         }
     }
     Spacer(Modifier.height(12.dp))
+    app.crome1394.almanac.data.VideoCall.find(e.location, e.description)?.let { call ->
+        InfoRow(Icons.Outlined.Videocam) {
+            androidx.compose.material3.Button(
+                onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.url))) }.onFailure { vm.say("No app can open this link") } },
+                modifier = Modifier.testTag("join"),
+            ) { Text("Join with ${call.service}") }
+        }
+    }
     if (e.location.isNotBlank()) {
         InfoRow(Icons.Outlined.LocationOn, onClick = {
             val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(e.location)))

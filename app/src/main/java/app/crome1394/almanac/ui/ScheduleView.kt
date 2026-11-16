@@ -236,7 +236,7 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
                 .then(if (i.dimmed()) Modifier.alpha(0.6f) else Modifier)) {
                 Text(i.title.ifBlank { "(No title)" }, color = ink, fontWeight = FontWeight.Medium, fontSize = 15.sp, maxLines = 2)
                 if (timeText != null) Text(timeText, color = ink.copy(alpha = 0.8f), fontSize = 12.sp)
-                if (i.location.isNotBlank()) Text(i.location, color = ink.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
+                if (i.location.isNotBlank()) Text(placeLabel(i.location), color = ink.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
             }
         }
         return
@@ -254,6 +254,10 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
             Spacer(Modifier.height(2.dp))
             Text(timeText, color = fg.copy(alpha = 0.9f), fontSize = 12.sp)
         }
-        if (i.location.isNotBlank()) Text(i.location, color = fg.copy(alpha = 0.9f), fontSize = 12.sp, maxLines = 1)
+        if (i.location.isNotBlank()) Text(placeLabel(i.location), color = fg.copy(alpha = 0.9f), fontSize = 12.sp, maxLines = 1)
     }
 }
+
+/** A video-call link as a location reads better as the service's name. */
+private fun placeLabel(location: String): String =
+    app.crome1394.almanac.data.VideoCall.find(location)?.takeIf { it.url == location.trim() }?.service ?: location
