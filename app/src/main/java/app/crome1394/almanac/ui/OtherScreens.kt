@@ -66,9 +66,9 @@ import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Search as a card over the calendar: the field, then results laid out like the schedule. */
 @Composable
-fun SearchScreen(vm: AppViewModel) {
+fun SearchCard(vm: AppViewModel, fieldAtBottom: Boolean = false) {
     var q by remember { mutableStateOf("") }
     val fmt = LocalFmt.current
     val focus = remember { FocusRequester() }
@@ -78,24 +78,25 @@ fun SearchScreen(vm: AppViewModel) {
         delay(250)
         value = if (q.isBlank()) null else vm.search(q)
     }
-    Scaffold(topBar = {
-        TopAppBar(
-            navigationIcon = { IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-            title = {
-                TextField(q, { q = it.take(200) }, placeholder = { Text("Search") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(),
-                    colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("search-field"))
-            },
-            actions = { if (q.isNotEmpty()) IconButton(onClick = { q = "" }) { Icon(Icons.Filled.Close, "Clear") } },
-        )
-    }) { pad ->
-        val zone = ZoneId.systemDefault()
-        val list = results
+    val field: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+            TextField(q, { q = it.take(200) }, placeholder = { Text("Search") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(),
+                colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                modifier = Modifier.weight(1f).focusRequester(focus).testTag("search-field"))
+            if (q.isNotEmpty()) IconButton(onClick = { q = "" }) { Icon(Icons.Filled.Close, "Clear") }
+        }
+    }
+    val zone = ZoneId.systemDefault()
+    val list = results
+    Column(Modifier.fillMaxWidth()) {
+        if (!fieldAtBottom) field()
+        if (list != null) HorizontalDivider()
         when {
             list == null -> {}
-            list.isEmpty() -> Text("No results", Modifier.padding(pad).padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            list.isEmpty() -> Text("No results", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             else -> {
               // Start at the first result from today on, as Google does; older ones are above.
               val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -106,7 +107,7 @@ fun SearchScreen(vm: AppViewModel) {
                   val idx = if (first == null) 0 else days.indexOf(first) + days.filter { it <= first }.map { it.withDayOfMonth(1) }.distinct().size - 1
                   if (idx > 0) listState.scrollToItem(idx)
               }
-              LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+              LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
                 val byDay = list.groupBy { it.startDate(zone) }.toSortedMap()
                 var lastMonth: java.time.YearMonth? = null
                 byDay.forEach { (day, events) ->
@@ -133,9 +134,11 @@ fun SearchScreen(vm: AppViewModel) {
                         }
                     }
                 }
-            }
+              }
             }
         }
+        if (list != null && fieldAtBottom) HorizontalDivider()
+        if (fieldAtBottom) field()
     }
 }
 

@@ -74,8 +74,9 @@ fun AlmanacRoot(vm: AppViewModel) {
                     Welcome(vm)
                 } else {
                     BackHandler(enabled = vm.stack.size > 1) { vm.back() }
+                    // Search and new events are cards over the screen below them.
                     AnimatedContent(
-                        targetState = vm.screen,
+                        targetState = vm.stack.lastOrNull { !it.isOverlay } ?: Screen.Main,
                         transitionSpec = {
                             (fadeIn() + slideInVertically { it / 12 }) togetherWith fadeOut()
                         },
@@ -86,11 +87,12 @@ fun AlmanacRoot(vm: AppViewModel) {
                             Screen.Main -> MainScreen(vm)
                             is Screen.Detail -> EventDetailScreen(vm, s)
                             is Screen.Edit -> EditEventScreen(vm, s.request)
-                            Screen.Search -> SearchScreen(vm)
+                            Screen.Search -> {}
                             Screen.Settings -> SettingsScreen(vm)
                             is Screen.Import -> ImportScreen(vm, s.events)
                         }
                     }
+                    OverlayHost(vm, vm.screen.takeIf { it.isOverlay })
                     EventActionsHost(vm)
                     NotificationPermissionAsk()
                 }

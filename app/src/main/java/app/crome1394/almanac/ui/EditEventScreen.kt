@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,7 +87,7 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditEventScreen(vm: AppViewModel, req: EditRequest) {
+fun EditEventScreen(vm: AppViewModel, req: EditRequest, inCard: Boolean = false) {
     val cals by vm.calendars.collectAsStateWithLifecycle()
     // Load the event being edited (once); a new event starts from the request's draft.
     val loaded by produceState<Pair<EventDetails?, EventDraft?>?>(null, req) {
@@ -100,7 +101,7 @@ fun EditEventScreen(vm: AppViewModel, req: EditRequest) {
         LaunchedEffect(Unit) { vm.say("This event no longer exists"); vm.back() }
         return
     }
-    Editor(vm, original, initial, req.instanceBegin, cals)
+    Editor(vm, original, initial, req.instanceBegin, cals, inCard)
 }
 
 /** The editable form of an existing event at the occurrence starting [instanceBegin]. */
@@ -124,7 +125,7 @@ internal fun draftFrom(e: EventDetails, instanceBegin: Long): EventDraft {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraft, instanceBegin: Long, cals: List<CalendarInfo>) {
+private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraft, instanceBegin: Long, cals: List<CalendarInfo>, inCard: Boolean) {
     val fmt = LocalFmt.current
     var d by remember { mutableStateOf(initial) }
     val writable = cals.filter { it.writable }
@@ -165,9 +166,15 @@ private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraf
         }
     }
 
+    // In a card the system bars are the card's business, not the editor's.
+    val noInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     Scaffold(
+        contentWindowInsets = if (inCard) noInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
+        containerColor = if (inCard) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
+                windowInsets = if (inCard) noInsets else TopAppBarDefaults.windowInsets,
+                colors = if (inCard) TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent) else TopAppBarDefaults.topAppBarColors(),
                 title = {},
                 navigationIcon = {
                     IconButton(onClick = { if (changed) askDiscard = true else vm.back() }, Modifier.testTag("cancel")) {
