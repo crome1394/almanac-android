@@ -331,6 +331,10 @@ fun ImportScreen(vm: AppViewModel, events: List<Ics.Parsed>) {
                         val b = e.start.atZone(zone).toInstant().toEpochMilli()
                         val en = (if (e.allDay) e.end.plusDays(1) else e.end).atZone(zone).toInstant().toEpochMilli()
                         Text(fmt.detailWhen(b, en, e.allDay), style = MaterialTheme.typography.bodyMedium)
+                        app.crome1394.almanac.data.RRule.parse(e.rrule)?.let { r ->
+                            Text(app.crome1394.almanac.data.RecurrenceText.describe(r, e.start.toLocalDate()),
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         if (e.location.isNotBlank()) Text(e.location, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

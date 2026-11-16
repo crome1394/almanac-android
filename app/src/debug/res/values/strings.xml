@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug builds sit beside the release build; this tells them apart in "Open with". -->
+    <string name="app_name">Almanac (debug)</string>
+</resources>
