@@ -1,6 +1,12 @@
 package app.crome1394.almanac.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -169,9 +175,10 @@ fun ScheduleView(vm: AppViewModel) {
     }
     // Sliding sideways while dragging changes the time (see ScheduleDrag.minutes).
     val screenW = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp.toPx() }
-    val dragHandle: (Instance, LocalDate) -> Modifier? = { i, day ->
-        if (i.isBirthday || vm.calendars.value.firstOrNull { it.id == i.calendarId }?.writable != true) null
-        else Modifier.dragHandle(
+    val cals by vm.calendars.collectAsStateWithLifecycle()
+    val dragHandle: (Instance, LocalDate) -> DragCallbacks? = { i, day ->
+        if (i.isBirthday || cals.firstOrNull { it.id == i.calendarId }?.writable != true) null
+        else DragCallbacks(
             onStart = { x, y -> drag = ScheduleDrag(i, day, x, y) },
             onMove = { dx, dy -> drag?.let { it.pointerY += dy; it.pointerX += dx } },
             onEnd = {
@@ -222,7 +229,7 @@ fun ScheduleView(vm: AppViewModel) {
                 // The floating copy shows the time it would get.
                 val shift = g.minutes(screenW) * 60_000L
                 Box(Modifier.shadow(8.dp, RoundedCornerShape(8.dp))) {
-                    ScheduleCard(vm, g.i.copy(begin = g.i.begin + shift, end = g.i.end + shift), g.fromDay, handle = Modifier)
+                    ScheduleCard(vm, g.i.copy(begin = g.i.begin + shift, end = g.i.end + shift), g.fromDay, showHandle = true)
                 }
                 if (target != null) {
                     val m = g.minutes(screenW)
@@ -267,6 +274,58 @@ private class ScheduleDrag(val i: Instance, val fromDay: LocalDate, val startX: 
     }
 }
 
+/** What dragging an event in Schedule reports: start and moves in root coordinates, then drop or cancel. */
+internal class DragCallbacks(
+    val onStart: (Float, Float) -> Unit,
+    val onMove: (Float, Float) -> Unit,
+    val onEnd: () -> Unit,
+    val onCancel: () -> Unit,
+)
+
+/**
+ * The card's own gesture: a tap opens the event; press and hold then move drags it (like the
+ * day/week grid); press and hold without moving opens the event menu. A quick swipe still
+ * scrolls the list or swipes the card away, because nothing is claimed before the hold.
+ */
+internal fun Modifier.holdToDrag(cb: DragCallbacks, onTap: () -> Unit, onHold: () -> Unit, onMenu: () -> Unit): Modifier =
+    composed {
+        var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+        val callbacks by androidx.compose.runtime.rememberUpdatedState(cb)
+        val tap by androidx.compose.runtime.rememberUpdatedState(onTap)
+        val hold by androidx.compose.runtime.rememberUpdatedState(onHold)
+        val menu by androidx.compose.runtime.rememberUpdatedState(onMenu)
+        this.onGloballyPositioned { origin = it.positionInRoot() }.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val long = awaitLongPressOrCancellation(down.id)
+                if (long == null) {
+                    val up = currentEvent.changes.firstOrNull { it.id == down.id }
+                    if (up != null && up.changedToUp() && !up.isConsumed) { up.consume(); tap() }
+                    return@awaitEachGesture
+                }
+                hold()
+                var moved = false
+                var started = false
+                val slop = viewConfiguration.touchSlop
+                var total = androidx.compose.ui.geometry.Offset.Zero
+                val ended = drag(long.id) { c ->
+                    val d = c.positionChange()
+                    c.consume()
+                    total += d
+                    if (!started && total.getDistance() > slop) {
+                        started = true; moved = true
+                        callbacks.onStart(origin.x + c.position.x, origin.y + c.position.y)
+                    } else if (started) callbacks.onMove(d.x, d.y)
+                }
+                when {
+                    !moved -> { currentEvent.changes.forEach { it.consume() }; menu() }
+                    ended -> callbacks.onEnd()
+                    else -> callbacks.onCancel()
+                }
+            }
+        }
+    }
+
 /**
  * The six-dot handle's gesture: dragging starts as soon as the finger moves (no long press),
  * and reports the finger's position in root coordinates.
@@ -309,7 +368,7 @@ private fun MonthBanner(d: LocalDate, parallax: () -> Float) {
 @Composable
 private fun DayEvents(
     vm: AppViewModel, date: LocalDate, events: List<Instance>,
-    dropHere: Boolean = false, dragging: Instance? = null, dragHandle: ((Instance, LocalDate) -> Modifier?)? = null,
+    dropHere: Boolean = false, dragging: Instance? = null, dragHandle: ((Instance, LocalDate) -> DragCallbacks?)? = null,
 ) {
     val fmt = LocalFmt.current
     val today = date == LocalDate.now()
@@ -362,7 +421,7 @@ private fun NowLine() {
 }
 
 @Composable
-internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate, handle: Modifier? = null) {
+internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate, drag: DragCallbacks? = null, showHandle: Boolean = drag != null) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
@@ -380,18 +439,27 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate, handle:
     }
     val shape = RoundedCornerShape(8.dp)
     val haptic = LocalHapticFeedback.current
+    // Tap opens; press and hold opens the menu, or drags the event if the finger then moves.
+    val press = if (drag != null) Modifier.holdToDrag(drag, onTap = { vm.open(i) },
+        onHold = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }, onMenu = { vm.menuFor = i })
+    else Modifier.combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.menuFor = i }) { vm.open(i) }
+    val handle: Modifier? = when {
+        drag != null -> Modifier.dragHandle(drag.onStart, drag.onMove, drag.onEnd, drag.onCancel)
+        showHandle -> Modifier
+        else -> null
+    }
     val theme = remember(i.title) { if (i.isBirthday) EventTheme.BIRTHDAY else EventTheme.of(i.title) }
     if (theme != null && !outlined) {
         // A picture card, as Google draws for dinners, birthdays, flights and so on.
         val ink = if (dark) Color.White else Color(0xFF1F1F1F)
         Box(
             Modifier.fillMaxWidth().height(96.dp).clip(shape)
-                .combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.menuFor = i }) { vm.open(i) }
+                .then(press)
                 .testTag("event"),
         ) {
             EventArt(theme, Color(i.color), dark, Modifier.fillMaxSize())
             if (handle != null) DragHandle(ink, handle.align(Alignment.CenterStart))
-            Column(Modifier.padding(start = if (handle != null) 28.dp else 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp).fillMaxWidth(0.68f)
+            Column(Modifier.padding(start = if (handle != null) 40.dp else 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp).fillMaxWidth(0.68f)
                 .then(if (i.dimmed()) Modifier.alpha(0.6f) else Modifier)) {
                 Text(i.title.ifBlank { "(No title)" }, color = ink, fontWeight = FontWeight.Medium, fontSize = 15.sp, maxLines = 2)
                 if (timeText != null) Text(timeText, color = ink.copy(alpha = 0.8f), fontSize = 12.sp)
@@ -403,7 +471,7 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate, handle:
     Row(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape)
             .then(if (outlined) Modifier.background(MaterialTheme.colorScheme.surface).androidxBorder(fill, shape) else Modifier.background(fill))
-            .combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.menuFor = i }) { vm.open(i) }
+            .then(press)
             .testTag("event"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -424,7 +492,7 @@ internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate, handle:
 /** The six-dot "drag to move" handle on the left of a movable event. */
 @Composable
 internal fun DragHandle(tint: Color, modifier: Modifier = Modifier, small: Boolean = false) {
-    Box(modifier.width(if (small) 14.dp else 28.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.width(if (small) 14.dp else 40.dp), contentAlignment = Alignment.Center) {
         androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.DragIndicator, "Drag to move",
             tint = tint.copy(alpha = 0.75f), modifier = Modifier.size(if (small) 14.dp else 20.dp).testTag("drag-handle"))
     }
