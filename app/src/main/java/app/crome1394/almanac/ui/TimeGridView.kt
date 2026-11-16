@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.crome1394.almanac.data.DayLayout
+import app.crome1394.almanac.data.MonthLayout
 import app.crome1394.almanac.data.Instance
 import app.crome1394.almanac.data.ViewMode
 import app.crome1394.almanac.data.startOfWeek
@@ -155,24 +156,39 @@ private fun DayHeaders(vm: AppViewModel, dates: List<LocalDate>, days: Int, week
     }
 }
 
-/** All-day and multi-day events above the grid, as chips per day (up to three, then "+N"). */
+/** All-day and multi-day events above the grid, as bars across their days (three lanes, then "+N"). */
 @Composable
 private fun AllDayRow(vm: AppViewModel, dates: List<LocalDate>, events: List<Instance>) {
     val zone = ZoneId.systemDefault()
-    val top = events.filter { it.inAllDayRow }
-    if (top.isEmpty()) return
+    val first = dates.first(); val last = dates.last()
+    val items = remember(events, first, last) {
+        events.filter { it.inAllDayRow && it.lastDate(zone) >= first && it.startDate(zone) <= last }
+            .sortedWith(compareBy<Instance> { maxOf(it.startDate(zone), first) }
+                .thenByDescending { it.lastDate(zone).toEpochDay() - it.startDate(zone).toEpochDay() }
+                .thenBy { it.begin })
+            .map {
+                MonthLayout.Item(it,
+                    ChronoUnit.DAYS.between(first, it.startDate(zone)).toInt().coerceIn(0, dates.size - 1),
+                    ChronoUnit.DAYS.between(first, it.lastDate(zone)).toInt().coerceIn(0, dates.size - 1))
+            }
+    }
+    if (items.isEmpty()) return
+    val week = remember(items) { MonthLayout.layout(items, lanes = 3) }
+    val lanes = (week.bars.maxOfOrNull { it.lane + 1 } ?: 0).coerceAtLeast(if (week.more.isNotEmpty()) 3 else 0)
     Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Box(Modifier.width(GUTTER))
-        dates.forEach { d ->
-            val here = top.filter { it.covers(d, zone) }
-            Column(Modifier.weight(1f).padding(horizontal = 1.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                here.take(if (here.size > 3) 2 else 3).forEach { i ->
-                    EventChip(i, Modifier.fillMaxWidth(), small = dates.size > 3) { vm.open(i) }
-                }
-                if (here.size > 3) Text(
-                    "+${here.size - 2}",
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
-                        .clickable { vm.selectedDate = d; vm.setView(ViewMode.SCHEDULE); vm.todayRequests.value++ }
+        BoxWithConstraints(Modifier.weight(1f).height(20.dp * lanes)) {
+            val colW = maxWidth / dates.size
+            week.bars.forEach { b ->
+                val i = b.value
+                EventChip(i, Modifier.offset(x = colW * b.start + 1.dp, y = 20.dp * b.lane).width(colW * (b.end - b.start + 1) - 2.dp),
+                    small = dates.size > 3, onLongClick = { vm.menuFor = i }) { vm.open(i) }
+            }
+            week.more.forEach { (col, n) ->
+                Text(
+                    "+$n",
+                    Modifier.offset(x = colW * col + 1.dp, y = 40.dp).width(colW - 2.dp).clip(RoundedCornerShape(4.dp))
+                        .clickable { vm.selectedDate = dates[col]; vm.setView(ViewMode.SCHEDULE); vm.todayRequests.value++ }
                         .padding(horizontal = 4.dp),
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

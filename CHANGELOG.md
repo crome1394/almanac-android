@@ -25,7 +25,8 @@ First version.
 - Swipe an event right in Schedule to delete it, with Undo; press and hold any
   event for Open, Edit, Duplicate and Delete.
 - Drag events to another time or day in the Day, 3-day and Week views.
-- Month view draws an event spanning several days as one bar.
+- Month view and the all-day row of Day, 3-day and Week draw an event spanning
+  several days as one bar.
 - Google's 11 event colors on every calendar: matched to DAVx5's color names
   when its "Event colors" setting is on, with a hint when it is off.
 - Recolor synced calendars (kept in Almanac on this phone).
