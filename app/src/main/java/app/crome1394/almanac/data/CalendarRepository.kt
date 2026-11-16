@@ -59,9 +59,36 @@ class CalendarRepository(private val context: Context) {
 
     fun bump() { _version.value++ }
 
+    /** A color picked in Almanac for a calendar (kept on this phone), or null for the stored one. */
+    var calendarColorOverride: (Long) -> Int? = { null }
+
+    // ---- Colors ----
+
+    /**
+     * The color to draw for an event: an event color the account stores as a CSS3 name (DAVx5)
+     * is drawn as the Google color it stands for; an event without its own color takes the
+     * calendar's color, including one picked in Almanac.
+     */
+    private inner class ColorResolver {
+        private val cals = readCalendars().associateBy { it.id }
+        private val shades = HashMap<Pair<String, String>, Map<String, Int>>()
+
+        fun resolve(calendarId: Long, key: String?, ownColor: Boolean, display: Int): Int {
+            val cal = cals[calendarId]
+            if (!key.isNullOrBlank() && cal != null) {
+                val m = shades.getOrPut(cal.accountName to cal.accountType) { Palette.shades(readEventColors(cal)) }
+                m[key]?.let { return it }
+            }
+            if (!ownColor && key.isNullOrBlank()) cal?.let { return it.color }
+            return display
+        }
+    }
+
     // ---- Calendars ----
 
-    suspend fun calendars(): List<CalendarInfo> = io {
+    suspend fun calendars(): List<CalendarInfo> = io { readCalendars() }
+
+    private fun readCalendars(): List<CalendarInfo> {
         val out = mutableListOf<CalendarInfo>()
         cr.query(
             Calendars.CONTENT_URI,
@@ -78,7 +105,8 @@ class CalendarRepository(private val context: Context) {
                     name = c.str(1).ifBlank { c.str(2) },
                     accountName = c.str(2),
                     accountType = c.str(3),
-                    color = c.getInt(4),
+                    color = calendarColorOverride(c.getLong(0)) ?: c.getInt(4),
+                    storedColor = c.getInt(4),
                     accessLevel = c.getInt(5),
                     visible = c.getInt(6) == 1,
                     ownerAccount = c.getString(7),
@@ -88,7 +116,7 @@ class CalendarRepository(private val context: Context) {
                 )
             }
         }
-        out
+        return out
     }
 
     suspend fun setCalendarVisible(id: Long, visible: Boolean) = io {
@@ -151,7 +179,9 @@ class CalendarRepository(private val context: Context) {
         }
     }
 
-    suspend fun eventColors(cal: CalendarInfo): List<EventColor> = io {
+    suspend fun eventColors(cal: CalendarInfo): List<EventColor> = io { readEventColors(cal) }
+
+    private fun readEventColors(cal: CalendarInfo): List<EventColor> =
         runCatching {
             cr.query(Colors.CONTENT_URI, arrayOf(Colors.COLOR_KEY, Colors.COLOR),
                 "${Colors.ACCOUNT_NAME}=? AND ${Colors.ACCOUNT_TYPE}=? AND ${Colors.COLOR_TYPE}=${Colors.TYPE_EVENT}",
@@ -159,7 +189,6 @@ class CalendarRepository(private val context: Context) {
                 buildList { while (c.moveToNext()) add(EventColor(c.str(0), c.getInt(1))) }
             } ?: emptyList()
         }.getOrDefault(emptyList())
-    }
 
     /** Asks every account's sync adapter to sync calendars now (DAVx5 honours this). */
     suspend fun requestSync(cals: List<CalendarInfo>) = io {
@@ -188,6 +217,7 @@ class CalendarRepository(private val context: Context) {
         ContentUris.appendId(builder, end)
         if (search != null) builder.appendPath(search)
         val out = mutableListOf<Instance>()
+        val colors = ColorResolver()
         val sel = "${Instances.VISIBLE}=1 AND (${Instances.STATUS} IS NULL OR ${Instances.STATUS}!=${Events.STATUS_CANCELED})"
         cr.query(builder.build(), INSTANCE_COLS, sel, null, "${Instances.BEGIN} ASC, ${Instances.END} DESC")?.use { c ->
             while (c.moveToNext()) {
@@ -201,7 +231,7 @@ class CalendarRepository(private val context: Context) {
                     allDay = c.getInt(3) == 1,
                     title = c.str(4),
                     location = c.str(5),
-                    color = c.getInt(6),
+                    color = colors.resolve(c.getLong(7), c.getString(12), !c.isNull(13) && c.getInt(13) != 0, c.getInt(6)),
                     calendarId = c.getLong(7),
                     recurring = !c.getString(8).isNullOrBlank() || !c.getString(11).isNullOrBlank(),
                     selfStatus = self,
@@ -219,6 +249,7 @@ class CalendarRepository(private val context: Context) {
     suspend fun event(id: Long): EventDetails? = io {
         cr.query(ContentUris.withAppendedId(Events.CONTENT_URI, id), EVENT_COLS, null, null, null)?.use { c ->
             if (!c.moveToFirst()) return@use null
+            val hasOwn = !c.isNull(15) && c.getInt(15) != 0 || !c.getString(14).isNullOrBlank()
             EventDetails(
                 id = c.getLong(0),
                 calendarId = c.getLong(1),
@@ -233,9 +264,9 @@ class CalendarRepository(private val context: Context) {
                 rrule = c.getString(10)?.takeIf { it.isNotBlank() },
                 rdate = c.getString(11)?.takeIf { it.isNotBlank() },
                 exdate = c.getString(12)?.takeIf { it.isNotBlank() },
-                color = c.getInt(13),
+                color = ColorResolver().resolve(c.getLong(1), c.getString(14), hasOwn, c.getInt(13)),
                 colorKey = c.getString(14),
-                hasOwnColor = !c.isNull(15) && c.getInt(15) != 0 || !c.getString(14).isNullOrBlank(),
+                hasOwnColor = hasOwn,
                 availability = c.getInt(16),
                 accessLevel = c.getInt(17),
                 organizer = c.getString(18),
@@ -495,6 +526,7 @@ class CalendarRepository(private val context: Context) {
             Instances.EVENT_ID, Instances.BEGIN, Instances.END, Instances.ALL_DAY, Instances.TITLE,
             Instances.EVENT_LOCATION, Instances.DISPLAY_COLOR, Instances.CALENDAR_ID, Instances.RRULE,
             Instances.SELF_ATTENDEE_STATUS, Instances.STATUS, Instances.RDATE,
+            Instances.EVENT_COLOR_KEY, Instances.EVENT_COLOR,
         )
         private val EVENT_COLS = arrayOf(
             Events._ID, Events.CALENDAR_ID, Events.TITLE, Events.DESCRIPTION, Events.EVENT_LOCATION,

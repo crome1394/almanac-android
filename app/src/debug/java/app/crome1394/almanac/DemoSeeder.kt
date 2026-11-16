@@ -22,7 +22,14 @@ class DemoSeeder : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         thread {
-            try { runBlocking { if (intent.hasExtra("soon")) soon(context.applicationContext) else seed(context.applicationContext) } } catch (e: Exception) { Log.e("Almanac", "seed failed", e) }
+            try { runBlocking {
+                val c = context.applicationContext
+                when {
+                    intent.hasExtra("soon") -> soon(c)
+                    intent.hasExtra("css") -> css(c)
+                    else -> seed(c)
+                }
+            } } catch (e: Exception) { Log.e("Almanac", "seed failed", e) }
             finally { pending.finish() }
         }
     }
@@ -33,6 +40,42 @@ class DemoSeeder : BroadcastReceiver() {
         val start = java.time.LocalDateTime.now().plusMinutes(2).withSecond(0).withNano(0)
         c.app.repo.insert(EventDraft(calendarId = cal.id, title = "Reminder test", start = start, end = start.plusMinutes(30),
             location = "Test room", reminders = listOf(Reminder(1, Reminders.METHOD_ALERT))))
+    }
+
+    /**
+     * `--ez css true`: a calendar that looks synced (made-up account type) and offers CSS3 named
+     * event colors the way DAVx5 does, with one event colored "deepskyblue".
+     */
+    private suspend fun css(c: Context) {
+        val acct = "test@example.com"; val type = "app.crome1394.almanac.test"
+        fun uri(base: android.net.Uri) = base.buildUpon()
+            .appendQueryParameter(android.provider.CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(android.provider.CalendarContract.Calendars.ACCOUNT_NAME, acct)
+            .appendQueryParameter(android.provider.CalendarContract.Calendars.ACCOUNT_TYPE, type).build()
+        val cr = c.contentResolver
+        val colors = mapOf("red" to 0xFF0000, "crimson" to 0xDC143C, "salmon" to 0xFA8072, "orangered" to 0xFF4500,
+            "gold" to 0xFFD700, "mediumseagreen" to 0x3CB371, "seagreen" to 0x2E8B57, "deepskyblue" to 0x00BFFF,
+            "darkslateblue" to 0x483D8B, "mediumpurple" to 0x9370DB, "darkorchid" to 0x9932CC, "dimgray" to 0x696969, "teal" to 0x008080)
+        colors.forEach { (k, v) ->
+            cr.insert(uri(android.provider.CalendarContract.Colors.CONTENT_URI), android.content.ContentValues().apply {
+                put("account_name", acct); put("account_type", type)
+                put(android.provider.CalendarContract.Colors.COLOR_TYPE, android.provider.CalendarContract.Colors.TYPE_EVENT)
+                put(android.provider.CalendarContract.Colors.COLOR_KEY, k); put(android.provider.CalendarContract.Colors.COLOR, (0xFF000000 or v.toLong()).toInt())
+            })
+        }
+        val calId = cr.insert(uri(android.provider.CalendarContract.Calendars.CONTENT_URI), android.content.ContentValues().apply {
+            put("account_name", acct); put("account_type", type)
+            put(android.provider.CalendarContract.Calendars.NAME, "Server")
+            put(android.provider.CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, "Server")
+            put(android.provider.CalendarContract.Calendars.CALENDAR_COLOR, 0xFFE67C73.toInt())
+            put(android.provider.CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, android.provider.CalendarContract.Calendars.CAL_ACCESS_OWNER)
+            put(android.provider.CalendarContract.Calendars.OWNER_ACCOUNT, acct)
+            put(android.provider.CalendarContract.Calendars.VISIBLE, 1); put(android.provider.CalendarContract.Calendars.SYNC_EVENTS, 1)
+        })!!.let(android.content.ContentUris::parseId)
+        val day = LocalDate.now().plusDays(1)
+        c.app.repo.insert(EventDraft(calendarId = calId, title = "Colored on the server", start = day.atTime(8, 0), end = day.atTime(9, 0), colorKey = "deepskyblue"))
+        c.app.repo.insert(EventDraft(calendarId = calId, title = "Teal from another app", start = day.atTime(9, 0), end = day.atTime(10, 0), colorKey = "teal"))
+        c.app.repo.insert(EventDraft(calendarId = calId, title = "Server calendar color", start = day.atTime(10, 0), end = day.atTime(11, 0)))
     }
 
     private suspend fun seed(c: Context) {

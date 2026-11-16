@@ -12,7 +12,10 @@ data class CalendarInfo(
     val name: String,
     val accountName: String,
     val accountType: String,
+    /** The color shown: one picked in Almanac, else [storedColor]. */
     val color: Int,
+    /** The color in the calendar store (from the server, for synced calendars). */
+    val storedColor: Int = color,
     val accessLevel: Int,
     val visible: Boolean,
     val ownerAccount: String?,

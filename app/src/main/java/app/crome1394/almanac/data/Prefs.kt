@@ -31,6 +31,8 @@ data class Settings(
     val defaultCalendarId: Long = -1,
     val viewMode: ViewMode = ViewMode.SCHEDULE,
     val hourHeightDp: Float = 52f,
+    /** Colors chosen in Almanac for calendars, by calendar id. Kept on this phone only. */
+    val calendarColors: Map<Long, Int> = emptyMap(),
 ) {
     fun firstDayOfWeek(locale: Locale = Locale.getDefault()): DayOfWeek =
         if (weekStart in 1..7) DayOfWeek.of(weekStart) else WeekFields.of(locale).firstDayOfWeek
@@ -59,6 +61,7 @@ class Prefs(context: Context) {
         defaultCalendarId = sp.getLong("defaultCalendar", -1),
         viewMode = enumOr(sp.getString("view", null), ViewMode.SCHEDULE),
         hourHeightDp = sp.getFloat("hourHeight", 52f),
+        calendarColors = parseColors(sp.getString("calendarColors", null)),
     )
 
     fun update(f: (Settings) -> Settings) {
@@ -78,9 +81,16 @@ class Prefs(context: Context) {
             .putLong("defaultCalendar", s.defaultCalendarId)
             .putString("view", s.viewMode.name)
             .putFloat("hourHeight", s.hourHeightDp)
+            .putString("calendarColors", s.calendarColors.entries.joinToString(",") { "${it.key}:${it.value}" })
             .apply()
         _settings.value = s
     }
+
+    private fun parseColors(s: String?): Map<Long, Int> =
+        s.orEmpty().split(',').mapNotNull { e ->
+            val (id, c) = e.split(':').takeIf { it.size == 2 } ?: return@mapNotNull null
+            (id.toLongOrNull() ?: return@mapNotNull null) to (c.toIntOrNull() ?: return@mapNotNull null)
+        }.toMap()
 
     private inline fun <reified E : Enum<E>> enumOr(name: String?, def: E): E =
         name?.let { n -> enumValues<E>().firstOrNull { it.name == n } } ?: def

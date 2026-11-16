@@ -253,12 +253,21 @@ private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraf
 
             // Color
             if (colors.isNotEmpty()) {
-                val c = colors.firstOrNull { it.key == d.colorKey }
+                val (label, shown) = colorLabel(colors, d.colorKey, cal)
                 Row_(Icons.Outlined.Palette, onClick = { dialog = "color" }, tag = "color") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(20.dp).clip(CircleShape).background(Color(c?.color ?: cal?.color ?: 0)))
+                        Box(Modifier.size(20.dp).clip(CircleShape).background(Color(shown)))
                         Spacer(Modifier.width(12.dp))
-                        Text(c?.let { Palette.nameOf(it.color) ?: it.key } ?: "Default color", style = MaterialTheme.typography.bodyLarge)
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                HorizontalDivider()
+            } else if (cal != null && !cal.isLocal) {
+                Row_(Icons.Outlined.Palette, tag = "color") {
+                    Column {
+                        Text("Calendar color", style = MaterialTheme.typography.bodyLarge)
+                        Text("To color single events, turn on \"Event colors\" in DAVx5 (account settings, CalDAV).",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 HorizontalDivider()
@@ -447,16 +456,35 @@ private fun GuestsEditor(vm: AppViewModel, guests: List<Attendee>, cal: Calendar
     }
 }
 
+/** The name and color shown for an event color key: Google's name when it stands for one. */
+private fun colorLabel(colors: List<app.crome1394.almanac.data.EventColor>, key: String?, cal: CalendarInfo?): Pair<String, Int> {
+    if (key == null) return "Calendar color" to (cal?.color ?: 0)
+    Palette.choices(colors).firstOrNull { it.third == key }?.let { return it.first to it.second }
+    val c = colors.firstOrNull { it.key == key } ?: return "Calendar color" to (cal?.color ?: 0)
+    return c.key.replaceFirstChar { it.uppercase() } to c.color
+}
+
 @Composable
 private fun ColorDialog(colors: List<app.crome1394.almanac.data.EventColor>, cal: CalendarInfo?, selected: String?,
                         onDismiss: () -> Unit, onPick: (String?) -> Unit) {
+    val choices = Palette.choices(colors)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Event color") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 ColorOption(Color(cal?.color ?: 0), "Calendar color", selected == null) { onPick(null) }
-                colors.forEach { c -> ColorOption(Color(c.color), Palette.nameOf(c.color) ?: c.key, c.key == selected) { onPick(c.key) } }
+                // A color set elsewhere that isn't one of Google's stays selectable.
+                if (selected != null && choices.none { it.third == selected }) {
+                    val (label, c) = colorLabel(colors, selected, cal)
+                    ColorOption(Color(c), label, true) { onPick(selected) }
+                }
+                var picked = false
+                choices.forEach { (name, c, key) ->
+                    val sel = key == selected && !picked
+                    if (sel) picked = true
+                    ColorOption(Color(c), name, sel) { onPick(key) }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

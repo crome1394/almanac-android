@@ -15,6 +15,7 @@ class AlmanacApp : Application() {
         super.onCreate()
         prefs = Prefs(this)
         repo = CalendarRepository(this)
+        repo.calendarColorOverride = { prefs.current.calendarColors[it] }
         birthdays = Birthdays(this)
         Notifier.createChannel(this)
         repo.startObserving()

@@ -81,7 +81,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            combine(repo.version, settings) { v, s -> Triple(v, s.hideDeclined, s.showBirthdays) }
+            combine(repo.version, settings) { v, s -> listOf(v, s.hideDeclined, s.showBirthdays, s.calendarColors) }
                 .distinctUntilChanged()
                 .collect {
                     reloadCalendars()
@@ -197,6 +197,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             repo.requestSync(calendars.value)
             birthdays.invalidate()
             _dataVersion.value++
+        }
+    }
+
+    /** Recolors a calendar. Phone-only calendars store it; synced ones keep it in Almanac only. */
+    fun setCalendarColor(cal: CalendarInfo, color: Int?) {
+        if (cal.isLocal && color != null) {
+            write { repo.updateLocalCalendar(cal.id, cal.name, color) }
+        } else {
+            prefs.update { s ->
+                s.copy(calendarColors = if (color == null || color == cal.storedColor) s.calendarColors - cal.id
+                else s.calendarColors + (cal.id to color))
+            }
         }
     }
 

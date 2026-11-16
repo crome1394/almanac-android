@@ -32,4 +32,34 @@ object Palette {
     )
 
     fun nameOf(color: Int): String? = EVENT.firstOrNull { it.second == color }?.first
+
+    /**
+     * Google's colors as the account can store them. Phone-only calendars carry Google's own
+     * colors; DAVx5 offers the CSS3 named colors (when its "Event colors" setting is on), so each
+     * Google color is matched to the nearest one the account has. Returns (Google name, Google
+     * color, account color key) for each Google color that has a match.
+     */
+    fun choices(available: List<EventColor>): List<Triple<String, Int, String>> {
+        if (available.isEmpty()) return emptyList()
+        return EVENT.map { (name, c) ->
+            val exact = available.firstOrNull { it.key.equals(name, ignoreCase = true) }
+            Triple(name, c, (exact ?: available.minBy { distance(it.color, c) }).key)
+        }
+    }
+
+    /** Account color key → the Google color drawn for it (first Google color to claim a key wins). */
+    fun shades(available: List<EventColor>): Map<String, Int> {
+        val out = LinkedHashMap<String, Int>()
+        choices(available).forEach { (_, c, key) -> out.putIfAbsent(key, c) }
+        return out
+    }
+
+    /** Perceptual-ish RGB distance ("redmean"), good enough to pick the nearest named color. */
+    internal fun distance(a: Int, b: Int): Double {
+        val r1 = (a shr 16) and 0xFF; val g1 = (a shr 8) and 0xFF; val b1 = a and 0xFF
+        val r2 = (b shr 16) and 0xFF; val g2 = (b shr 8) and 0xFF; val b2 = b and 0xFF
+        val rm = (r1 + r2) / 2.0
+        val dr = (r1 - r2).toDouble(); val dg = (g1 - g2).toDouble(); val db = (b1 - b2).toDouble()
+        return (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db
+    }
 }

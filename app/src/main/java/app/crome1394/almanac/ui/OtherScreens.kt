@@ -2,7 +2,14 @@ package app.crome1394.almanac.ui
 
 import android.content.Intent
 import android.provider.Settings as AndroidSettings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.draw.clip
+import app.crome1394.almanac.data.Palette
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -143,6 +150,7 @@ fun SettingsScreen(vm: AppViewModel) {
     var editCal by remember { mutableStateOf<CalendarInfo?>(null) }
     var deleteCal by remember { mutableStateOf<CalendarInfo?>(null) }
     var renameCal by remember { mutableStateOf<CalendarInfo?>(null) }
+    var colorCal by remember { mutableStateOf<CalendarInfo?>(null) }
     fun set(f: (Settings) -> Settings) = vm.prefs.update(f)
     val locale = Locale.getDefault()
 
@@ -188,11 +196,18 @@ fun SettingsScreen(vm: AppViewModel) {
                     dialog = "defaultCal"
                 }
             }
-            items(cals.filter { it.isLocal }, key = { it.id }) { c ->
-                Choice(c.name, "Phone-only calendar · tap to edit") { editCal = c }
+            items(cals, key = { it.id }) { c ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.padding(start = 16.dp).size(14.dp).clip(CircleShape).background(Color(c.color)))
+                    Box(Modifier.weight(1f)) {
+                        if (c.isLocal) Choice(c.name, "Phone-only calendar · tap to edit") { editCal = c }
+                        else Choice(c.name, c.accountName + " · tap to change its color") { colorCal = c }
+                    }
+                }
             }
             item {
-                Text("Calendars from your server are added, renamed and removed in DAVx5 or on the server.",
+                Text("Calendars from your server are added, renamed and removed in DAVx5 or on the server. " +
+                    "A color picked here for one of them is used by Almanac on this phone only.",
                     Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -228,6 +243,26 @@ fun SettingsScreen(vm: AppViewModel) {
             text = { Text("Rename, recolor or delete this phone-only calendar.") },
             confirmButton = { androidx.compose.material3.TextButton(onClick = { editCal = null; renameCal = c }) { Text("Edit") } },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { editCal = null; deleteCal = c }) { Text("Delete") } },
+        )
+    }
+    colorCal?.let { c ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { colorCal = null },
+            title = { Text(c.name) },
+            text = {
+                Column {
+                    ColorGrid(Palette.EVENT, c.color) { col -> colorCal = null; vm.setCalendarColor(c, col) }
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth().clickable { colorCal = null; vm.setCalendarColor(c, null) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(24.dp).clip(CircleShape).background(Color(c.storedColor)))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Color from the server")
+                        if (c.color == c.storedColor) { Spacer(Modifier.width(8.dp)); Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary) }
+                    }
+                }
+            },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { colorCal = null }) { Text("Cancel") } },
         )
     }
     renameCal?.let { c ->
