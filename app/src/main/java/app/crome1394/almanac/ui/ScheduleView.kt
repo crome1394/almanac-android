@@ -201,7 +201,7 @@ private fun NowLine() {
 }
 
 @Composable
-private fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
+internal fun ScheduleCard(vm: AppViewModel, i: Instance, day: LocalDate) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined

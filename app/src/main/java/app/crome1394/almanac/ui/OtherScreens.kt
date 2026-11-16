@@ -92,13 +92,18 @@ fun SearchScreen(vm: AppViewModel) {
             else -> LazyColumn(Modifier.padding(pad).fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 val byDay = list.groupBy { it.startDate(zone) }.toSortedMap()
                 byDay.forEach { (day, events) ->
-                    item(key = "h$day") {
-                        Text(fmt.dayLong(day), Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    items(events, key = { "e" + it.key }) { i ->
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
-                            EventChip(i, Modifier.fillMaxWidth()) { vm.open(i) }
+                    item(key = "d$day") {
+                        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 8.dp)) {
+                            Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(fmt.weekdayShort(day), style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                DayNumber(day)
+                                if (day.year != java.time.LocalDate.now().year) Text(day.year.toString(),
+                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Column(Modifier.weight(1f).padding(start = 8.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+                                events.forEach { i -> ScheduleCard(vm, i, day) }
+                            }
                         }
                     }
                 }
