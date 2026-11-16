@@ -2,6 +2,12 @@ package app.crome1394.almanac.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import app.crome1394.almanac.data.MonthLayout
+import java.time.temporal.ChronoUnit
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,11 +69,6 @@ fun MonthView(vm: AppViewModel) {
         val gridStart = weeks.first()
         val gridEnd = weeks.last().plusDays(6)
         val events by rememberInstances(vm, gridStart, gridEnd)
-        val byDay = remember(events) {
-            val m = HashMap<LocalDate, MutableList<Instance>>()
-            events.orEmpty().forEach { i -> datesOf(i, gridStart, gridEnd, zone).forEach { m.getOrPut(it) { mutableListOf() } += i } }
-            m.mapValues { (_, l) -> l.sortedWith(compareBy<Instance> { !(it.allDay || it.isMultiDayTimed(zone)) }.thenBy { it.begin }) }
-        }
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 if (settings.showWeekNumbers) Box(Modifier.width(20.dp))
@@ -84,11 +84,7 @@ fun MonthView(vm: AppViewModel) {
                         Text(ws.get(WeekFields.ISO.weekOfWeekBasedYear()).toString(), Modifier.width(20.dp).padding(top = 6.dp),
                             fontSize = 9.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    (0 until 7).forEach { k ->
-                        val d = ws.plusDays(k.toLong())
-                        if (k > 0) VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        MonthCell(vm, d, d.month == month.month, byDay[d].orEmpty(), Modifier.weight(1f).fillMaxHeight())
-                    }
+                    WeekRow(vm, ws, month, events.orEmpty(), Modifier.weight(1f).fillMaxHeight())
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -96,36 +92,81 @@ fun MonthView(vm: AppViewModel) {
     }
 }
 
+/**
+ * One week of the grid: day numbers, then every event as a bar across the days it covers
+ * (multi-day events first, then each day's events by time), with "+N" where a day overflows.
+ */
 @Composable
-private fun MonthCell(vm: AppViewModel, d: LocalDate, inMonth: Boolean, events: List<Instance>, modifier: Modifier) {
-    val today = d == LocalDate.now()
+private fun WeekRow(vm: AppViewModel, weekStart: LocalDate, month: YearMonth, events: List<Instance>, modifier: Modifier) {
+    val zone = ZoneId.systemDefault()
+    val weekEnd = weekStart.plusDays(6)
+    val line = MaterialTheme.colorScheme.outlineVariant
+    val items = remember(events, weekStart) {
+        events.filter { it.lastDate(zone) >= weekStart && it.startDate(zone) <= weekEnd }
+            .sortedWith(
+                compareBy<Instance> { it.startDate(zone) == it.lastDate(zone) } // multi-day first
+                    .thenBy { maxOf(it.startDate(zone), weekStart) }
+                    .thenByDescending { it.lastDate(zone).toEpochDay() - it.startDate(zone).toEpochDay() }
+                    .thenBy { !it.allDay }
+                    .thenBy { it.begin },
+            )
+            .map {
+                MonthLayout.Item(it, ChronoUnit.DAYS.between(weekStart, it.startDate(zone)).toInt(),
+                    ChronoUnit.DAYS.between(weekStart, it.lastDate(zone)).toInt())
+            }
+    }
     BoxWithConstraints(
-        modifier.clickable { vm.selectedDate = d; vm.setView(ViewMode.DAY) }.testTag("cell-$d"),
+        modifier.drawBehind {
+            val w = size.width / 7
+            for (k in 1 until 7) drawLine(line, Offset(k * w, 0f), Offset(k * w, size.height), 1f)
+        },
     ) {
-        // Each chip is 17dp plus 1dp spacing; the date takes 26dp.
-        val fit = ((maxHeight.value - 28f) / 18f).toInt().coerceAtLeast(0)
-        Column(Modifier.fillMaxSize().padding(horizontal = 1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Box(Modifier.fillMaxWidth().padding(top = 3.dp), contentAlignment = Alignment.Center) {
+        val cellW = maxWidth / 7
+        // Each bar is 17dp plus 1dp spacing; the date takes 28dp.
+        val lanes = ((maxHeight.value - 28f) / 18f).toInt().coerceAtLeast(0)
+        val week = remember(items, lanes) { MonthLayout.layout(items, lanes) }
+        Row(Modifier.fillMaxSize()) {
+            (0 until 7).forEach { k ->
+                val d = weekStart.plusDays(k.toLong())
+                val today = d == LocalDate.now()
                 Box(
-                    Modifier.size(22.dp).clip(CircleShape).background(if (today) MaterialTheme.colorScheme.primary else Color.Transparent),
-                    contentAlignment = Alignment.Center,
+                    Modifier.weight(1f).fillMaxHeight().clickable { vm.selectedDate = d; vm.setView(ViewMode.DAY) }.testTag("cell-$d"),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    Text(
-                        d.dayOfMonth.toString(), fontSize = 12.sp,
-                        color = when {
-                            today -> MaterialTheme.colorScheme.onPrimary
-                            !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
-                    )
+                    Box(
+                        Modifier.padding(top = 3.dp).size(22.dp).clip(CircleShape)
+                            .background(if (today) MaterialTheme.colorScheme.primary else Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            d.dayOfMonth.toString(), fontSize = 12.sp,
+                            color = when {
+                                today -> MaterialTheme.colorScheme.onPrimary
+                                d.month != month.month -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                else -> MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
                 }
             }
-            val shown = if (events.size > fit) (fit - 1).coerceAtLeast(0) else events.size
-            events.take(shown).forEach { i -> EventChip(i, Modifier.fillMaxWidth(), small = true, onLongClick = { vm.menuFor = i }) { vm.open(i) } }
-            if (events.size > shown) {
-                Text("+${events.size - shown}", Modifier.padding(start = 3.dp), fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        }
+        week.bars.forEach { b ->
+            val i = b.value
+            EventChip(
+                i,
+                Modifier.offset(x = cellW * b.start + 1.dp, y = 28.dp + 18.dp * b.lane).width(cellW * (b.end - b.start + 1) - 2.dp),
+                small = true, onLongClick = { vm.menuFor = i },
+            ) { vm.open(i) }
+        }
+        week.more.forEach { (col, n) ->
+            Text(
+                "+$n",
+                Modifier.offset(x = cellW * col + 1.dp, y = 28.dp + 18.dp * (lanes - 1).coerceAtLeast(0)).width(cellW - 2.dp)
+                    .height(17.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                    .clickable { vm.selectedDate = weekStart.plusDays(col.toLong()); vm.setView(ViewMode.DAY) }
+                    .padding(start = 3.dp),
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
