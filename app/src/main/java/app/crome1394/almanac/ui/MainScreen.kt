@@ -105,6 +105,7 @@ fun MainScreen(vm: AppViewModel) {
             Drawer(vm, settings.viewMode, onPick = { scope.launch { drawer.close() } }, onAddCalendar = { addCalendar = true })
         },
     ) {
+      Box(Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
                 Column {
@@ -154,14 +155,6 @@ fun MainScreen(vm: AppViewModel) {
                     }
                 }
             },
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { vm.newEvent() },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.testTag("new-event"),
-                ) { Icon(Icons.Filled.Add, "New event", Modifier.size(28.dp)) }
-            },
         ) { pad ->
             Box(Modifier.padding(pad).fillMaxSize()) {
                 val cals by vm.calendars.collectAsStateWithLifecycle()
@@ -178,6 +171,8 @@ fun MainScreen(vm: AppViewModel) {
                 }
             }
         }
+        QuickMenu(vm)
+      }
     }
     if (addCalendar) CalendarDialog(null, onDismiss = { addCalendar = false }) { name, color ->
         addCalendar = false
