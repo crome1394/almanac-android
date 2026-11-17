@@ -11,7 +11,7 @@ How Almanac covers the Google Calendar app, screen by screen.
 | Month name in the top bar opens a mini month | Same (not in Month view); dots mark busy days |
 | Today button with today's date | Same |
 | Search | A card over the calendar; searches titles, places, descriptions and guests across ±2–3 years |
-| + button | A ⋮ button instead: a menu above the thumb with Create event, the views, Refresh and Jump to today |
+| + button | A ⋮ button instead: a menu above the thumb with Create event, the views and Refresh |
 | Toolbar at the top | Or at the bottom (Settings → Toolbar at the bottom) |
 | Pull to refresh | In Schedule; asks DAVx5 to sync now |
 | Month illustrations in Schedule | An original landscape per month, drawn in layers that drift as you scroll |

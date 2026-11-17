@@ -32,7 +32,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CalendarViewDay
 import androidx.compose.material.icons.outlined.CalendarViewWeek
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.ViewColumn
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -57,7 +56,7 @@ import app.crome1394.almanac.data.ViewMode
 
 /**
  * The floating "⋮" button: opens a column of actions just above the thumb (create, the five
- * views, refresh, today), so the app can be used one-handed.
+ * views, refresh), so the app can be used one-handed. Today is the button in the toolbar.
  */
 @Composable
 fun BoxScope.QuickMenu(vm: AppViewModel, aboveBottomBar: Dp? = null) {
@@ -96,7 +95,6 @@ fun BoxScope.QuickMenu(vm: AppViewModel, aboveBottomBar: Dp? = null) {
                     Item(label, icon, tag = "quick-${m.name.lowercase()}", selected = settings.viewMode == m) { go { vm.setView(m) } }
                 }
                 Item("Refresh", Icons.Outlined.Refresh, tag = "quick-refresh") { go { vm.refresh(); vm.say("Syncing…") } }
-                Item("Jump to today", Icons.Outlined.Today, tag = "quick-today") { go { vm.goToday() } }
             }
         }
         FloatingActionButton(

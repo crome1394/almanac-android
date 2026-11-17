@@ -38,7 +38,7 @@ First version.
   card then move); a six-dot handle marks every event
   that can be moved (in the grid it starts a drag without the long press).
 - A floating ⋮ button opens a menu above the thumb: Create event, the five
-  views, Refresh and Jump to today.
+  views and Refresh.
 - Settings → Toolbar at the bottom, for one-handed use.
 - Search, event details, new events and edits open as cards over the
   calendar; drag a card's handle to resize it.
