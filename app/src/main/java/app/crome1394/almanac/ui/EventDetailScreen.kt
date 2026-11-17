@@ -22,6 +22,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -158,9 +161,6 @@ fun EventDetailScreen(vm: AppViewModel, s: Screen.Detail, inCard: Boolean = fals
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
                     Details(vm, e, cal, begin, end)
                 }
-                val me = cal?.ownerAccount
-                val mine = e.attendees.firstOrNull { me != null && it.email.equals(me, true) }
-                if (mine != null && !mine.isOrganizer && cal?.writable == true) Rsvp(mine.status) { vm.respond(e, cal, it) }
             }
         }
     }
@@ -197,6 +197,7 @@ private fun Details(vm: AppViewModel, e: EventDetails, cal: app.crome1394.almana
             }
         }
     }
+    QuickActions(vm, e, cal)
     Spacer(Modifier.height(12.dp))
     app.crome1394.almanac.data.VideoCall.find(e.location, e.description)?.let { call ->
         InfoRow(Icons.Outlined.Videocam) {
@@ -342,19 +343,76 @@ fun stripHtml(s: String): String {
     return android.text.Html.fromHtml(s, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
 }
 
+/**
+ * At the top of an event: "Going? Yes / No / Maybe" when you are one of its guests, and the
+ * event's color as a row of circles (the calendar's own color first) when you can edit it.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun Rsvp(status: Int, onPick: (Int) -> Unit) {
-    HorizontalDivider()
-    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Going?", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        listOf(
-            Attendees.ATTENDEE_STATUS_ACCEPTED to "Yes", Attendees.ATTENDEE_STATUS_DECLINED to "No",
-            Attendees.ATTENDEE_STATUS_TENTATIVE to "Maybe",
-        ).forEach { (st, label) ->
-            FilterChip(selected = status == st, onClick = { onPick(st) }, label = { Text(label) }, modifier = Modifier.testTag("rsvp-$label"))
+private fun QuickActions(vm: AppViewModel, e: EventDetails, cal: app.crome1394.almanac.data.CalendarInfo?) {
+    val me = cal?.ownerAccount
+    val mine = e.attendees.firstOrNull { me != null && it.email.equals(me, true) }
+    val canReply = mine != null && !mine.isOrganizer && cal?.writable == true
+    val colors by produceState(emptyList<app.crome1394.almanac.data.EventColor>(), cal?.id) {
+        value = if (cal?.writable == true) vm.repo.eventColors(cal) else emptyList()
+    }
+    val choices = remember(colors) { app.crome1394.almanac.data.Palette.choices(colors) }
+    if (!canReply && choices.isEmpty()) return
+    Column(Modifier.padding(start = 60.dp, end = 16.dp, top = 12.dp)) {
+        if (canReply) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Going?", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 4.dp))
+                listOf(
+                    Attendees.ATTENDEE_STATUS_ACCEPTED to "Yes", Attendees.ATTENDEE_STATUS_DECLINED to "No",
+                    Attendees.ATTENDEE_STATUS_TENTATIVE to "Maybe",
+                ).forEach { (st, label) ->
+                    val on = mine!!.status == st
+                    androidx.compose.material3.Surface(
+                        onClick = { vm.respond(e, cal!!, st) }, shape = RoundedCornerShape(50),
+                        color = if (on) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                        border = androidx.compose.foundation.BorderStroke(1.dp,
+                            if (on) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.testTag("rsvp-$label"),
+                    ) {
+                        Text(label, Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge,
+                            color = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+        if (choices.isNotEmpty()) {
+            if (canReply) HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            Text("COLOUR", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp))
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.testTag("colours"),
+            ) {
+                val key = e.colorKey?.takeIf { it.isNotBlank() }
+                ColourDot(Color(cal?.color ?: e.color), "Calendar color", key == null) {
+                    if (key != null) vm.write("Color changed") { vm.repo.setEventColor(e, null) }
+                }
+                var picked = false
+                choices.forEach { (name, c, k) ->
+                    val sel = k == key && !picked
+                    if (sel) picked = true
+                    ColourDot(Color(c), name, sel) { if (!sel) vm.write("Color changed") { vm.repo.setEventColor(e, k) } }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun ColourDot(c: Color, label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(28.dp).clip(CircleShape)
+            .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+            .padding(if (selected) 4.dp else 0.dp).clip(CircleShape).background(c)
+            .clickable(onClickLabel = label, onClick = onClick)
+            .semantics { contentDescription = label },
+    )
 }
 
 /** Asks which occurrences to change, as Google does for repeating events. */

@@ -460,6 +460,19 @@ class CalendarRepository(private val context: Context) {
             arrayOf(eventId.toString(), before.toString()), null)?.use { it.count } ?: 0
     }
 
+    /**
+     * Changes only an event's color ([key] from the account's colors, or null for the calendar's
+     * color). For a repeating event this is the whole series. No time column is written, so the
+     * store doesn't re-expand the series.
+     */
+    suspend fun setEventColor(e: EventDetails, key: String?) = io {
+        val v = ContentValues().apply {
+            if (key != null) put(Events.EVENT_COLOR_KEY, key) else { putNull(Events.EVENT_COLOR_KEY); putNull(Events.EVENT_COLOR) }
+        }
+        cr.update(eventUri(e.id), v, null, null)
+        Unit
+    }
+
     /** Answers an invitation for the calendar's owner. */
     suspend fun respond(eventId: Long, ownerEmail: String, status: Int) = io {
         val v = ContentValues().apply { put(Attendees.ATTENDEE_STATUS, status) }
