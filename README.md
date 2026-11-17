@@ -7,7 +7,7 @@
 
 A calendar app for Android that works like the Google Calendar app, without
 a Google account. Almanac shows and edits the calendars already on the phone.
-Point DAVx5 at a CalDAV server (such as [Davit](https://github.com/crome1394/davit))
+Point DAVx5 at a CalDAV server (Davit, Radicale, Nextcloud…)
 and your server's calendars appear here, with changes synced back. Nothing
 leaves the phone except through your own sync app.
 
@@ -32,16 +32,28 @@ leaves the phone except through your own sync app.
 
 ## Screenshots
 
-| Week | Month | Event | Edit |
+| Week | Month | Event | New event |
 |---|---|---|---|
-| ![](docs/screenshots/week.png) | ![](docs/screenshots/month.png) | ![](docs/screenshots/event.png) | ![](docs/screenshots/edit.png) |
+| ![Week view](docs/screenshots/week.png) | ![Month view](docs/screenshots/month.png) | ![Event card](docs/screenshots/event.png) | ![New event card](docs/screenshots/edit.png) |
+
+| ⋮ menu | Dark |
+|---|---|
+| ![Quick menu](docs/screenshots/menu.png) | ![Dark mode](docs/screenshots/dark.png) |
+
+## Install
+
+Download `almanac-0.1.0.apk` from the [latest release](https://github.com/crome1394/almanac-android/releases/latest)
+and open it on your phone (allow installing from your browser or file
+manager when asked), or build it yourself.
 
 ## Quick start
 
 1. Install DAVx5 and add your CalDAV account; tick the calendars under **CalDAV**
    ([details](docs/sync.md)).
 2. Install Almanac and allow calendar access.
-3. Optional: turn off notifications in any other calendar app, so reminders
+3. In DAVx5's account settings, turn on **Event colors** so events can take
+   their own colors.
+4. Optional: turn off notifications in any other calendar app, so reminders
    are not shown twice.
 
 Build it yourself with `./gradlew assembleDebug` ([building](docs/building.md)).

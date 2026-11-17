@@ -9,6 +9,7 @@
 ```sh
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew testDebugUnitTest    # unit tests
+./gradlew connectedDebugAndroidTest   # repeating-event edits against a device's calendar store
 ./gradlew assembleRelease      # needs the signing settings below
 ```
 
@@ -24,7 +25,21 @@ calendars. The debug build includes a seeder:
 adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder
 # an event with a reminder one minute away:
 adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder --ez soon true
+# every month landscape and event picture on one screen:
+adb -s emulator-5554 shell am start -n app.crome1394.almanac.debug/app.crome1394.almanac.ArtGallery
 ```
+
+The instrumented tests (`RepositoryTest`) create throwaway calendars, one of
+them under a made-up synced account, run each kind of repeating-event edit
+through the app's own code, check the occurrences the calendar store
+expands, and delete everything they made. They don't touch existing
+calendars, but run them on an emulator unless you have a reason not to.
+
+## Screenshots
+
+`docs/screenshots/` is made on an emulator from the seeder's made-up events,
+at 540 px wide, with the clock set to the morning so today's events aren't
+dimmed.
 
 ## Signing
 
