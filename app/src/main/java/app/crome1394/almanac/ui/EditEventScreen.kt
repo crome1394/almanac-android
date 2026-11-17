@@ -203,21 +203,25 @@ private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraf
             HorizontalDivider()
 
             // Time
-            Row_(Icons.Outlined.AccessTime) {
+            val toggleAllDay: (Boolean) -> Unit = { on ->
+                val timedDefault = vm.defaultReminders(false, cal)
+                val allDayDefault = vm.defaultReminders(true, cal)
+                d = if (on) {
+                    // Under a day long (even 23:59 to 00:59) becomes that one day; a longer span keeps its last day.
+                    val oneDay = Duration.between(d.start, d.end) < Duration.ofDays(1)
+                    d.copy(allDay = true, end = if (oneDay) d.start else d.end,
+                        reminders = if (d.reminders == timedDefault) allDayDefault else d.reminders)
+                } else {
+                    val st = d.start.toLocalDate().atTime(9, 0)
+                    d.copy(allDay = false, start = st, end = st.plusMinutes(vm.settings.value.defaultDurationMin.toLong()),
+                        reminders = if (d.reminders == allDayDefault) timedDefault else d.reminders)
+                }
+            }
+            // The whole row toggles, not just the switch.
+            Row_(Icons.Outlined.AccessTime, onClick = { toggleAllDay(!d.allDay) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("All-day", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                    Switch(d.allDay, { on ->
-                        val timedDefault = vm.defaultReminders(false, cal)
-                        val allDayDefault = vm.defaultReminders(true, cal)
-                        d = if (on) {
-                            d.copy(allDay = true, end = maxOf(d.end, d.start).with(maxOf(d.end.toLocalDate(), d.start.toLocalDate())),
-                                reminders = if (d.reminders == timedDefault) allDayDefault else d.reminders)
-                        } else {
-                            val st = d.start.toLocalDate().atTime(9, 0)
-                            d.copy(allDay = false, start = st, end = st.plusMinutes(vm.settings.value.defaultDurationMin.toLong()),
-                                reminders = if (d.reminders == allDayDefault) timedDefault else d.reminders)
-                        }
-                    }, modifier = Modifier.testTag("all-day"))
+                    Switch(d.allDay, toggleAllDay, modifier = Modifier.testTag("all-day"))
                 }
             }
             DateTimeRow(fmt, d.start, d.allDay, tag = "start",

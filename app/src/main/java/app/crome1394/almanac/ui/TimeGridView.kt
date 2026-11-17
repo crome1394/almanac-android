@@ -189,19 +189,23 @@ private fun AllDayRow(vm: AppViewModel, dates: List<LocalDate>, events: List<Ins
     if (items.isEmpty()) return
     val week = remember(items) { MonthLayout.layout(items, lanes = 3) }
     val lanes = (week.bars.maxOfOrNull { it.lane + 1 } ?: 0).coerceAtLeast(if (week.more.isNotEmpty()) 3 else 0)
+    // Lanes fit the chip: the small one in week view, the taller one (with padding) in day and 3-day view.
+    val small = dates.size > 3
+    val lane = if (small) 20.dp else 30.dp
     Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Box(Modifier.width(GUTTER))
-        BoxWithConstraints(Modifier.weight(1f).height(20.dp * lanes)) {
+        BoxWithConstraints(Modifier.weight(1f).height(lane * lanes)) {
             val colW = maxWidth / dates.size
             week.bars.forEach { b ->
                 val i = b.value
-                EventChip(i, Modifier.offset(x = colW * b.start + 1.dp, y = 20.dp * b.lane).width(colW * (b.end - b.start + 1) - 2.dp),
-                    small = dates.size > 3, onLongClick = { vm.menuFor = i }) { vm.open(i) }
+                EventChip(i, Modifier.offset(x = colW * b.start + 1.dp, y = lane * b.lane).width(colW * (b.end - b.start + 1) - 2.dp)
+                    .then(if (small) Modifier else Modifier.height(lane - 3.dp)),
+                    small = small, onLongClick = { vm.menuFor = i }) { vm.open(i) }
             }
             week.more.forEach { (col, n) ->
                 Text(
                     "+$n",
-                    Modifier.offset(x = colW * col + 1.dp, y = 40.dp).width(colW - 2.dp).clip(RoundedCornerShape(4.dp))
+                    Modifier.offset(x = colW * col + 1.dp, y = lane * 2).width(colW - 2.dp).clip(RoundedCornerShape(4.dp))
                         .clickable { vm.selectedDate = dates[col]; vm.setView(ViewMode.SCHEDULE); vm.todayRequests.value++ }
                         .padding(horizontal = 4.dp),
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
