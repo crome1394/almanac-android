@@ -91,8 +91,10 @@ class DemoSeeder : BroadcastReceiver() {
             ev(work, "Stand-up", today.minusDays(14), LocalTime.of(9, 30), LocalTime.of(9, 45)) { copy(rrule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR") },
             ev(work, "Design review", today, LocalTime.of(10, 0), LocalTime.of(11, 30)) {
                 copy(location = "Room 4", description = "Agenda: https://example.com/agenda",
+                    // An invitation from Alex, so the event card shows "Going?" (the phone's own account is "Phone").
                     attendees = listOf(Attendee(email = "alex@example.com", name = "Alex", status = Attendees.ATTENDEE_STATUS_ACCEPTED),
-                        Attendee(email = "sam@example.com", name = "Sam")), organizer = "Phone")
+                        Attendee(email = "sam@example.com", name = "Sam"),
+                        Attendee(email = "Phone", name = "Me", status = Attendees.ATTENDEE_STATUS_INVITED)), organizer = "alex@example.com")
             },
             ev(personal, "Dentist", today, LocalTime.of(11, 0), LocalTime.of(12, 0)) { copy(location = "12 High Street") },
             ev(personal, "Lunch with Jo", today, LocalTime.of(12, 30), LocalTime.of(13, 30)),

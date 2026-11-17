@@ -38,6 +38,7 @@ class RepositoryTest {
     private val day0 = LocalDate.of(2030, 3, 4)
     private var syncedCal = -1L
     private var localCal = -1L
+    private var hadLocalColors = false
 
     private val acct = "test@example.com"
     private val type = "app.crome1394.almanac.test"
@@ -60,6 +61,7 @@ class RepositoryTest {
             put(Calendars.CALENDAR_ACCESS_LEVEL, Calendars.CAL_ACCESS_OWNER)
             put(Calendars.OWNER_ACCOUNT, acct); put(Calendars.VISIBLE, 1); put(Calendars.SYNC_EVENTS, 1)
         })!!.let(ContentUris::parseId)
+        hadLocalColors = localColorCount() > 0
         localCal = runBlocking { repo.createLocalCalendar("Local test", 0xFF0B8043.toInt()) }
     }
 
@@ -67,7 +69,13 @@ class RepositoryTest {
         cr.delete(adapter(ContentUris.withAppendedId(Calendars.CONTENT_URI, syncedCal)), null, null)
         cr.delete(adapter(ContentUris.withAppendedId(Calendars.CONTENT_URI, localCal), CalendarRepository.LOCAL_ACCOUNT,
             CalendarContract.ACCOUNT_TYPE_LOCAL), null, null)
+        // Making a phone-only calendar adds Google's colors for that account; leave none behind.
+        if (!hadLocalColors) cr.delete(adapter(CalendarContract.Colors.CONTENT_URI, CalendarRepository.LOCAL_ACCOUNT,
+            CalendarContract.ACCOUNT_TYPE_LOCAL), "${CalendarContract.Colors.ACCOUNT_TYPE}=?", arrayOf(CalendarContract.ACCOUNT_TYPE_LOCAL))
     }
+
+    private fun localColorCount(): Int = cr.query(CalendarContract.Colors.CONTENT_URI, arrayOf(CalendarContract.Colors.COLOR_KEY),
+        "${CalendarContract.Colors.ACCOUNT_TYPE}=?", arrayOf(CalendarContract.ACCOUNT_TYPE_LOCAL), null)?.use { it.count } ?: 0
 
     private fun at(day: Int, h: Int, m: Int = 0) = LocalDateTime.of(day0.plusDays(day.toLong()), java.time.LocalTime.of(h, m))
         .atZone(zone).toInstant().toEpochMilli()
