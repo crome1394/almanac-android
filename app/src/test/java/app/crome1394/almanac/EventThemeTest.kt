@@ -19,6 +19,9 @@ class EventThemeTest {
         assertEquals(EventTheme.GYM, EventTheme.of("GYM"))
         assertEquals(EventTheme.SWIM, EventTheme.of("Kids' swimming"))
         assertEquals(EventTheme.MOVIE, EventTheme.of("Movies"))
+        assertEquals(EventTheme.CAR, EventTheme.of("Defensive driving training course"))
+        assertEquals(EventTheme.STUDY, EventTheme.of("First aid training"))
+        assertEquals(EventTheme.GYM, EventTheme.of("Gym workout"))
     }
 
     @Test fun wholeWordsOnly() {
