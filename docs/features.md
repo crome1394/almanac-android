@@ -45,10 +45,10 @@ How Almanac covers the Google Calendar app, screen by screen.
 ## Event details
 
 Color, title, date and time (plus the event's own zone if it differs), repeat
-rule, location (opens maps), guests with replies and organiser, Email guests,
+rule; then **Going? Yes / No / Maybe** if you are a guest, and a row of color
+circles (the calendar's color first) that recolors the event in one tap; location (opens maps), guests with replies and organiser, Email guests,
 notifications, description with tappable links, calendar and account,
-busy/free and visibility. Menu: Delete, Duplicate, Share. If you are a guest
-you can answer **Going? Yes / No / Maybe**.
+busy/free and visibility. Menu: Delete, Duplicate, Share.
 
 ## Editing
 

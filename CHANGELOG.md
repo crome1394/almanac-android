@@ -48,3 +48,6 @@ First version.
 - Day/3-day/week: drag an event's bottom edge to change its end; press, hold
   and drag on empty time to create an event of that length.
 - Month: drag events to another day; "+N" opens a list of that day's events.
+- Event card: Going? Yes / No / Maybe at the top for invitations, and a row of
+  color circles to recolor the event in one tap.
+- Turning on All-day for an event under a day long keeps it to that one day.
