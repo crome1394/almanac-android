@@ -22,7 +22,9 @@ First version.
   scroll; the month name in the top bar rolls when the month changes.
 - Picture cards in Schedule for dinners, birthdays, flights, holidays and 40
   other kinds of event, chosen from words in the title.
-- Swipe an event right in Schedule to delete it, with Undo; press and hold any
+- Swipe an event right in Schedule to delete it, with Undo (it must be a
+  clearly sideways swipe across 40% of the card; a buzz marks the point where
+  letting go deletes); press and hold any
   event for Open, Edit, Duplicate and Delete.
 - Drag events to another time or day in the Day, 3-day and Week views.
 - Month view and the all-day row of Day, 3-day and Week draw an event spanning

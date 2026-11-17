@@ -1,6 +1,28 @@
 package app.crome1394.almanac.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,10 +44,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -37,31 +56,83 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-/** Swipe an event to the right to delete it (with Undo), as in Google Calendar's schedule. */
+/**
+ * Swipe an event to the right to delete it (with Undo). Made hard to trigger by accident while
+ * scrolling: the swipe only starts when the finger moves clearly sideways, it has to travel
+ * [ARM_SHARE] of the card's width (a haptic buzz marks the point where letting go deletes), a
+ * fast flick alone never deletes, and the card stays open for a moment before it goes.
+ */
 @Composable
 fun SwipeToDelete(vm: AppViewModel, i: app.crome1394.almanac.data.Instance, content: @Composable () -> Unit) {
     if (i.isBirthday) { content(); return }
     val scope = rememberCoroutineScope()
-    val state = rememberSwipeToDismissBoxState()
-    SwipeToDismissBox(
-        state = state,
-        enableDismissFromEndToStart = false,
-        onDismiss = { v ->
-            if (v == SwipeToDismissBoxValue.StartToEnd) scope.launch {
-                vm.askDelete(i)
-                state.reset()
+    val haptic = LocalHapticFeedback.current
+    val offset = remember { Animatable(0f) }
+    var width by remember { mutableIntStateOf(1) }
+    var armed by remember { mutableStateOf(false) }
+    val event by rememberUpdatedState(i)
+
+    Box(
+        Modifier.onSizeChanged { width = it.width.coerceAtLeast(1) }.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val slop = viewConfiguration.touchSlop * 1.5f
+                var total = Offset.Zero
+                var swiping = false
+                while (true) {
+                    val ev = awaitPointerEvent()
+                    val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!c.pressed) break
+                    // Someone else (the list's scroll, a drag handle, a held card) took the gesture.
+                    if (!swiping && c.isConsumed) return@awaitEachGesture
+                    val d = c.positionChange()
+                    total += d
+                    if (!swiping) {
+                        if (total.getDistance() < slop) continue
+                        // Only a clearly sideways, rightward move starts a swipe.
+                        if (total.x <= 0f || abs(total.x) < abs(total.y) * 2.5f) return@awaitEachGesture
+                        swiping = true
+                    }
+                    c.consume()
+                    val next = (offset.value + d.x).coerceIn(0f, width.toFloat())
+                    scope.launch { offset.snapTo(next) }
+                    val nowArmed = next >= width * ARM_SHARE
+                    if (nowArmed != armed) {
+                        armed = nowArmed
+                        haptic.performHapticFeedback(if (nowArmed) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove)
+                    }
+                }
+                if (!swiping) return@awaitEachGesture
+                val delete = armed
+                armed = false
+                scope.launch {
+                    if (delete) {
+                        offset.animateTo(width.toFloat(), tween(120))
+                        delay(220)
+                        vm.askDelete(event)
+                    }
+                    offset.animateTo(0f, spring())
+                }
             }
         },
-        backgroundContent = {
-            // Only while swiping: past events are drawn translucent and would show it through.
-            if (state.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Box(
-                Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.errorContainer)
-                    .padding(start = 16.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) { Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.onErrorContainer) }
-        },
-    ) { content() }
+    ) {
+        // Only while swiping: past events are drawn translucent and would show it through.
+        if (offset.value > 0f) Box(
+            Modifier.matchParentSize().clip(RoundedCornerShape(8.dp))
+                .background(if (armed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.errorContainer)
+                .padding(start = 16.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Icon(Icons.Outlined.Delete, "Delete",
+                tint = if (armed) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(if (armed) 28.dp else 24.dp))
+        }
+        Box(Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }) { content() }
+    }
 }
+
+/** How far (share of the card's width) a swipe must go before letting go deletes. */
+private const val ARM_SHARE = 0.4f
 
 /** What press-and-hold on an event offers, and the "which occurrences?" question for deletes. */
 @OptIn(ExperimentalMaterial3Api::class)

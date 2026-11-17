@@ -327,27 +327,49 @@ internal fun Modifier.holdToDrag(cb: DragCallbacks, onTap: () -> Unit, onHold: (
     }
 
 /**
- * The six-dot handle's gesture: dragging starts as soon as the finger moves (no long press),
- * and reports the finger's position in root coordinates.
+ * The six-dot handle's gesture: touch and hold it for a moment (a haptic tick says the event
+ * is picked up), then move. Moving straight away scrolls the list instead, so scrolling with a
+ * finger that lands on a handle doesn't move events. Reports the finger in root coordinates.
  */
 internal fun Modifier.dragHandle(onStart: (Float, Float) -> Unit, onMove: (Float, Float) -> Unit, onEnd: () -> Unit, onCancel: () -> Unit): Modifier =
     composed {
-        var top by remember { mutableFloatStateOf(0f) }
-        var left by remember { mutableFloatStateOf(0f) }
+        var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+        val haptic = LocalHapticFeedback.current
         // The gesture outlives recompositions; always call the latest callbacks (they see the current drop target).
         val start by androidx.compose.runtime.rememberUpdatedState(onStart)
         val move by androidx.compose.runtime.rememberUpdatedState(onMove)
         val end by androidx.compose.runtime.rememberUpdatedState(onEnd)
         val cancel by androidx.compose.runtime.rememberUpdatedState(onCancel)
-        this.onGloballyPositioned { it.positionInRoot().let { p -> top = p.y; left = p.x } }.pointerInput(Unit) {
-            detectDragGestures(
-                onDragStart = { o -> start(left + o.x, top + o.y) },
-                onDrag = { c, d -> c.consume(); move(d.x, d.y) },
-                onDragEnd = { end() },
-                onDragCancel = { cancel() },
-            )
+        this.onGloballyPositioned { origin = it.positionInRoot() }.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val slop = viewConfiguration.touchSlop
+                // Wait out the hold; lifting or moving before it ends leaves the gesture to the list.
+                val interrupted = withTimeoutOrNull(HANDLE_HOLD_MS) {
+                    while (true) {
+                        val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull true
+                        if (!c.pressed || c.isConsumed || (c.position - down.position).getDistance() > slop) return@withTimeoutOrNull true
+                    }
+                    @Suppress("UNREACHABLE_CODE") true
+                }
+                if (interrupted == true) return@awaitEachGesture
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                currentEvent.changes.forEach { it.consume() }
+                var started = false
+                val ended = drag(down.id) { c ->
+                    val d = c.positionChange()
+                    c.consume()
+                    if (!started) { started = true; start(origin.x + c.position.x - d.x, origin.y + c.position.y - d.y) }
+                    move(d.x, d.y)
+                }
+                if (!started) return@awaitEachGesture // held and let go without moving: nothing to do
+                if (ended) end() else cancel()
+            }
         }
     }
+
+/** How long a finger must rest on a handle before it picks the event up. */
+private const val HANDLE_HOLD_MS = 180L
 
 /** Month banner: a landscape for the month whose layers drift as the list scrolls past. */
 @Composable
