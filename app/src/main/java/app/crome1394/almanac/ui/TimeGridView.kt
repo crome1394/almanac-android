@@ -78,6 +78,8 @@ import java.time.temporal.WeekFields
 
 private val GUTTER = 52.dp
 private const val CENTER = 10_000
+/** How long a finger must rest on a handle or bottom edge before it picks the event up. */
+private const val EDGE_HOLD_MS = 180L
 
 /** Day, 3-day and week views: a scrollable 24-hour grid, swiped sideways between periods. */
 @Composable
@@ -209,10 +211,27 @@ private fun AllDayRow(vm: AppViewModel, dates: List<LocalDate>, events: List<Ins
     }
 }
 
-/** An event being dragged to a new time (press and hold, then move). */
-private class GridDrag(val i: Instance, val dayIndex: Int, val startMin: Int, val lenMin: Int, val anchorY: Float) {
+/** What a drag in the grid does: move an event, change its end, or mark out a new one. */
+private enum class DragMode { MOVE, RESIZE, CREATE }
+
+/**
+ * A drag in the grid. For [DragMode.CREATE] there is no event: [startMin] is the 15-minute slot
+ * where the finger came down.
+ */
+private class GridDrag(val mode: DragMode, val i: Instance?, val dayIndex: Int, val startMin: Int, val lenMin: Int, val anchorY: Float) {
     var dx by mutableFloatStateOf(0f)
     var dy by mutableFloatStateOf(0f)
+
+    private fun snap(m: Float) = Math.round(m / 15f) * 15
+
+    /** A resize: the new length in minutes (15 minutes at least, not past midnight). */
+    fun newLength(hourPx: Float): Int = snap(lenMin + dy / hourPx * 60f).coerceIn(15, 1440 - startMin)
+
+    /** A new event: start and end minute of the marked-out range (the slot itself at least). */
+    fun range(hourPx: Float): Pair<Int, Int> {
+        val b = snap(startMin + dy / hourPx * 60f).coerceIn(0, 1440)
+        return if (b >= startMin) startMin to maxOf(b, startMin + 15) else b to startMin + 15
+    }
 
     /** Where the event would land: days moved and minutes moved (snapped to 15). */
     fun target(hourPx: Float, colPx: Float, days: Int): Pair<Int, Int> {
@@ -304,18 +323,26 @@ private fun Grid(
                             vm, d, events.filter { !it.inAllDayRow && it.covers(d, zone) && it.end > dayStart },
                             hourDp, now, compact = dates.size > 3, dragging = drag?.i,
                             canDrag = { i -> i.startDate(zone) == d && cals.firstOrNull { it.id == i.calendarId }?.writable == true },
-                            onDragStart = { i, startMin, lenMin, y ->
+                            onDragStart = { mode, i, startMin, lenMin, y ->
                                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                drag = GridDrag(i, k, startMin, lenMin, startMin / 60f * hourPx + y)
+                                drag = GridDrag(mode, i, k, startMin, lenMin, startMin / 60f * hourPx + y)
                             },
                             onDrag = { dx, dy -> drag?.let { it.dx += dx; it.dy += dy } },
                             onDragEnd = {
                                 val g = drag
                                 drag = null
-                                if (g != null) {
-                                    val (dd, dm) = g.target(hourPx, colPx, dates.size)
-                                    if (dd == 0 && dm == 0) vm.menuFor = g.i
-                                    else vm.move(g.i, dd, dm)
+                                if (g != null) when (g.mode) {
+                                    DragMode.MOVE -> {
+                                        val (dd, dm) = g.target(hourPx, colPx, dates.size)
+                                        if (dd == 0 && dm == 0) vm.menuFor = g.i else vm.move(g.i!!, dd, dm)
+                                    }
+                                    DragMode.RESIZE -> vm.resize(g.i!!, g.newLength(hourPx) - g.lenMin)
+                                    DragMode.CREATE -> {
+                                        val (a, b) = g.range(hourPx)
+                                        // A hold without moving makes an event of the usual length.
+                                        val moved = kotlin.math.abs(g.dy) > hourPx / 8
+                                        vm.newEvent(dates[g.dayIndex], LocalTime.of(a / 60 % 24, a % 60), durationMin = if (moved) b - a else null)
+                                    }
                                 }
                             },
                             onDragCancel = { drag = null },
@@ -324,22 +351,26 @@ private fun Grid(
                     }
                 }
                 drag?.let { g ->
-                    val (dd, dm) = g.target(hourPx, colPx, dates.size)
-                    val start = g.startMin + dm
+                    // Where the event (or the new one) would be: day column, start and length in minutes.
+                    val (col, start, len) = when (g.mode) {
+                        DragMode.MOVE -> g.target(hourPx, colPx, dates.size).let { (dd, dm) -> Triple(g.dayIndex + dd, g.startMin + dm, g.lenMin) }
+                        DragMode.RESIZE -> Triple(g.dayIndex, g.startMin, g.newLength(hourPx))
+                        DragMode.CREATE -> g.range(hourPx).let { (a, b) -> Triple(g.dayIndex, a, b - a) }
+                    }
                     val shape = RoundedCornerShape(6.dp)
-                    val fill = eventFill(g.i.color, isDark(), false)
-                    val fg = onEventColor(Color(g.i.color))
-                    val day = dates[g.dayIndex + dd]
-                    val begin = day.atStartOfDay(zone).plusMinutes(start.toLong()).toInstant().toEpochMilli()
+                    val color = g.i?.color
+                    val fill = if (color != null) eventFill(color, isDark(), false) else MaterialTheme.colorScheme.primaryContainer
+                    val fg = if (color != null) onEventColor(Color(color)) else MaterialTheme.colorScheme.onPrimaryContainer
+                    val begin = dates[col].atStartOfDay(zone).plusMinutes(start.toLong()).toInstant().toEpochMilli()
                     Column(
-                        Modifier.offset(x = colW * (g.dayIndex + dd), y = hourDp * (start / 60f))
-                            .width(colW - 2.dp).height(hourDp * (g.lenMin.coerceAtLeast(24) / 60f))
+                        Modifier.offset(x = colW * col, y = hourDp * (start / 60f))
+                            .width(colW - 2.dp).height(hourDp * (len.coerceAtLeast(24) / 60f))
                             .shadow(8.dp, shape).clip(shape).background(fill)
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                             .testTag("drag-ghost"),
                     ) {
-                        Text(g.i.title.ifBlank { "(No title)" }, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                        Text("${fmt.time(begin)} – ${fmt.time(begin + (g.i.end - g.i.begin))}", color = fg, fontSize = 11.sp, maxLines = 1)
+                        Text(g.i?.title?.ifBlank { "(No title)" } ?: "New event", color = fg, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        Text("${fmt.time(begin)} – ${fmt.time(begin + len * 60_000L)}", color = fg, fontSize = 11.sp, maxLines = 1, modifier = Modifier.testTag("drag-time"))
                     }
                 }
             }
@@ -351,7 +382,7 @@ private fun Grid(
 private fun DayColumn(
     vm: AppViewModel, day: LocalDate, events: List<Instance>, hourDp: Dp, now: Long, compact: Boolean,
     dragging: Instance?, canDrag: (Instance) -> Boolean,
-    onDragStart: (Instance, Int, Int, Float) -> Unit, onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onDragCancel: () -> Unit,
+    onDragStart: (DragMode, Instance?, Int, Int, Float) -> Unit, onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onDragCancel: () -> Unit,
     modifier: Modifier,
 ) {
     val zone = ZoneId.systemDefault()
@@ -364,11 +395,28 @@ private fun DayColumn(
             DayLayout.Item(it, s, e)
         }, minHeight = 24)
     }
+    val writable = vm.writableCalendars().isNotEmpty()
     BoxWithConstraints(
-        modifier.pointerInput(day, hourDp) {
-            detectTapGestures { pos ->
-                val minutes = (pos.y / with(density) { hourDp.toPx() } * 60).toInt()
-                vm.newEvent(day, LocalTime.of((minutes / 60).coerceIn(0, 23), if (minutes % 60 >= 30) 30 else 0))
+        // Empty grid: tap for a new event at that half hour; press, hold and drag to mark out its length.
+        modifier.pointerInput(day, hourDp, writable) {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val hourPx = hourDp.toPx()
+                val long = awaitLongPressOrCancellation(down.id)
+                if (long == null) {
+                    val up = currentEvent.changes.firstOrNull { it.id == down.id }
+                    if (up != null && up.changedToUp() && !up.isConsumed) {
+                        up.consume()
+                        val minutes = (down.position.y / hourPx * 60).toInt()
+                        vm.newEvent(day, LocalTime.of((minutes / 60).coerceIn(0, 23), if (minutes % 60 >= 30) 30 else 0))
+                    }
+                    return@awaitEachGesture
+                }
+                if (!writable) return@awaitEachGesture
+                val slot = ((long.position.y / hourPx * 60).toInt() / 15 * 15).coerceIn(0, 1440 - 15)
+                onDragStart(DragMode.CREATE, null, slot, 15, long.position.y - slot / 60f * hourPx)
+                val ended = drag(long.id) { c -> val d = c.positionChange(); c.consume(); onDrag(d.x, d.y) }
+                if (ended) onDragEnd() else onDragCancel()
             }
         },
     ) {
@@ -380,26 +428,38 @@ private fun DayColumn(
             val w = colW / p.cols
             val draggable = canDrag(i)
             val showHandle = draggable && w * p.span >= 60.dp && height >= 24.dp
+            // The bottom edge changes the end; only for events that end on this day and are tall enough to grab.
+            val resizable = draggable && height >= 36.dp && p.end < 1440 && i.end - dayStart <= 1440 * 60_000L
             // One gesture handler tells a tap (open), a hold (menu) and a hold-then-move (drag) apart.
             val gestures = if (draggable) Modifier.pointerInput(i.key) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume() // so the grid's tap-to-create doesn't also fire
-                    // On the six-dot handle a drag starts at once; elsewhere after a long press.
+                    // The six-dot handle and the bottom edge pick up after a brief hold; elsewhere after a long press.
                     val onHandle = showHandle && down.position.x < 18.dp.toPx()
-                    val long = if (onHandle) down else awaitLongPressOrCancellation(down.id)
+                    val onEdge = resizable && down.position.y > size.height - 14.dp.toPx()
+                    val long = if (onHandle || onEdge) {
+                        val interrupted = withTimeoutOrNull(EDGE_HOLD_MS) {
+                            while (true) {
+                                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull true
+                                if (!c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull true
+                            }
+                            @Suppress("UNREACHABLE_CODE") true
+                        }
+                        if (interrupted == true) null else down
+                    } else awaitLongPressOrCancellation(down.id)
                     if (long == null) {
                         val up = currentEvent.changes.firstOrNull { it.id == down.id }
                         if (up != null && up.changedToUp()) { up.consume(); vm.open(i) }
                         return@awaitEachGesture
                     }
-                    onDragStart(i, p.start, ((i.end - i.begin) / 60_000).toInt(), long.position.y)
+                    onDragStart(if (onEdge) DragMode.RESIZE else DragMode.MOVE, i, p.start, ((i.end - i.begin) / 60_000).toInt(), long.position.y)
                     val ended = drag(long.id) { c -> val d = c.positionChange(); c.consume(); onDrag(d.x, d.y) }
                     // A hold without moving ends with the event where it was, which opens the menu.
                     if (ended) onDragEnd() else onDragCancel()
                 }
             } else Modifier
-            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, clickable = !draggable, handle = showHandle,
+            GridEvent(vm, i, compact, narrow = w * p.span < 60.dp, clickable = !draggable, handle = showHandle, resizable = resizable,
                 modifier = Modifier.offset(x = w * p.col, y = top).width(w * p.span - 2.dp).height(height)
                     .then(if (dragging?.key == i.key) Modifier.alpha(0.35f) else Modifier).then(gestures))
         }
@@ -413,7 +473,7 @@ private fun DayColumn(
 }
 
 @Composable
-private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, clickable: Boolean, handle: Boolean, modifier: Modifier) {
+private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: Boolean, clickable: Boolean, handle: Boolean, resizable: Boolean = false, modifier: Modifier) {
     val fmt = LocalFmt.current
     val dark = isDark()
     val outlined = i.tentative || i.declined
@@ -428,6 +488,9 @@ private fun GridEvent(vm: AppViewModel, i: Instance, compact: Boolean, narrow: B
             .testTag("event"),
     ) {
     if (handle) DragHandle(fg, Modifier.padding(start = 1.dp, top = 3.dp), small = true)
+    // A small bar on the bottom edge: hold and drag it to change when the event ends.
+    if (resizable) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(width = 18.dp, height = 3.dp)
+        .clip(RoundedCornerShape(2.dp)).background(fg.copy(alpha = 0.6f)).testTag("resize-handle"))
     Column(Modifier.padding(start = if (handle) 15.dp else if (compact) 3.dp else 6.dp, end = if (compact) 3.dp else 6.dp, top = 2.dp, bottom = 2.dp)) {
         Text(i.title.ifBlank { "(No title)" }, color = fg, fontSize = if (compact) 11.sp else 12.sp, fontWeight = FontWeight.Medium,
             maxLines = if (narrow) 1 else 3, softWrap = !narrow, lineHeight = 14.sp,

@@ -151,7 +151,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** A new event as Google prefills it: next whole hour, default length and reminder. */
-    fun newDraft(date: LocalDate = selectedDate, time: LocalTime? = null, allDay: Boolean = false): EventDraft? {
+    fun newDraft(date: LocalDate = selectedDate, time: LocalTime? = null, allDay: Boolean = false, durationMin: Int? = null): EventDraft? {
         val cal = defaultCalendar() ?: return null
         val s = settings.value
         val now = LocalDateTime.now()
@@ -164,7 +164,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             calendarId = cal.id,
             allDay = allDay,
             start = start,
-            end = if (allDay) start else start.plusMinutes(s.defaultDurationMin.toLong()),
+            end = if (allDay) start else start.plusMinutes((durationMin ?: s.defaultDurationMin).toLong()),
             reminders = defaultReminders(allDay, cal),
             organizer = cal.ownerAccount,
         )
@@ -178,8 +178,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return listOf(Reminder(m, method))
     }
 
-    fun newEvent(date: LocalDate = selectedDate, time: LocalTime? = null, allDay: Boolean = false) {
-        val d = newDraft(date, time, allDay)
+    fun newEvent(date: LocalDate = selectedDate, time: LocalTime? = null, allDay: Boolean = false, durationMin: Int? = null) {
+        val d = newDraft(date, time, allDay, durationMin)
         if (d == null) say("Add a calendar first: open the menu and choose \"Add calendar\"")
         else push(Screen.Edit(EditRequest(draft = d)))
     }
@@ -270,16 +270,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // ---- Drag to move ----
 
     /** A recurring occurrence dragged to a new day or time, waiting for "this / following / all". */
-    data class MoveRequest(val i: Instance, val e: EventDetails, val days: Int, val minutes: Int)
+    /** [endMinutes] moves the end separately (a resize); null moves it with the start. */
+    data class MoveRequest(val i: Instance, val e: EventDetails, val days: Int, val minutes: Int, val endMinutes: Int? = null)
     var moveAsk by mutableStateOf<MoveRequest?>(null)
 
     /** Moves a dragged occurrence by [days] and [minutes] (wall-clock, in the event's own zone). */
-    fun move(i: Instance, days: Int, minutes: Int) {
-        if (days == 0 && minutes == 0) return
+    fun move(i: Instance, days: Int, minutes: Int) = change(i, days, minutes, null)
+
+    /** Makes a dragged occurrence end [endMinutes] later (or earlier), keeping its start. */
+    fun resize(i: Instance, endMinutes: Int) { if (endMinutes != 0) change(i, 0, 0, endMinutes) }
+
+    private fun change(i: Instance, days: Int, minutes: Int, endMinutes: Int?) {
+        if (days == 0 && minutes == 0 && (endMinutes ?: 0) == 0) return
         viewModelScope.launch {
             val e = runCatching { repo.event(i.eventId) }.getOrNull() ?: return@launch say("This event no longer exists")
-            val r = MoveRequest(i, e, days, if (e.allDay) 0 else minutes)
-            if (r.days == 0 && r.minutes == 0) return@launch
+            val r = MoveRequest(i, e, days, if (e.allDay) 0 else minutes, if (e.allDay) null else endMinutes)
+            if (r.days == 0 && r.minutes == 0 && (r.endMinutes ?: 0) == 0) return@launch
             if (e.isRecurring || e.isException) moveAsk = r else applyMove(r, Scope.ALL)
         }
     }
@@ -287,13 +293,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun applyMove(r: MoveRequest, scope: Scope) {
         val (i, e) = r
         val before = draftFrom(e, i.begin)
-        fun shift(t: LocalDateTime) = t.plusDays(r.days.toLong()).plusMinutes(r.minutes.toLong())
-        val moved = before.copy(start = shift(before.start), end = shift(before.end))
+        fun shift(t: LocalDateTime, m: Int) = t.plusDays(r.days.toLong()).plusMinutes(m.toLong())
+        val moved = before.copy(start = shift(before.start, r.minutes), end = shift(before.end, r.endMinutes ?: r.minutes))
         viewModelScope.launch {
             val res = runCatching { repo.update(e, moved, scope, i.begin) }
             if (res.isFailure) return@launch say("Couldn't move: " + (res.exceptionOrNull()?.message ?: "unknown error"))
-            if (e.isRecurring || e.isException) say("Event moved")
-            else _undo.tryEmit(UndoMessage("Event moved") {
+            val what = if (r.endMinutes != null) "Event updated" else "Event moved"
+            if (e.isRecurring || e.isException) say(what)
+            else _undo.tryEmit(UndoMessage(what) {
                 // A one-off event goes back to where it was.
                 viewModelScope.launch {
                     runCatching { repo.event(e.id)?.let { now -> repo.update(now, before, Scope.ALL, now.dtStart) } }

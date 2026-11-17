@@ -172,7 +172,7 @@ fun EventActionsHost(vm: AppViewModel) {
         }
     }
     vm.moveAsk?.let { r ->
-        ScopeDialog("Move recurring event", "OK", onDismiss = { vm.moveAsk = null }) { s ->
+        ScopeDialog(if (r.endMinutes != null) "Change recurring event" else "Move recurring event", "OK", onDismiss = { vm.moveAsk = null }) { s ->
             vm.moveAsk = null
             vm.applyMove(r, s)
         }
