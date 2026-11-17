@@ -55,7 +55,8 @@ GPU host, start it with `-gpu swiftshader_indirect`.
   `new-event`, `today`, `search`, `edit`, `more`, `save`, `cancel`,
   `title-field`, `start-time`, `repeat`, `cell-YYYY-MM-DD`, `event`,
   `join`, `drag-ghost`, `drag-handle`, `quick-create`, `quick-<view>`,
-  `quick-refresh`, `search-field`, `card-handle`. The ⋮ button
+  `quick-refresh`, `search-field`, `card-handle`, `resize-handle`,
+  `drag-time`, `more-<column>`, `day-list`. The ⋮ button
   keeps the id `new-event`.
   Dialogs and menus are separate windows: find them by their text.
 - Finish with unit tests passing, a clean build, and the change checked on an

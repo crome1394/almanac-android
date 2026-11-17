@@ -45,3 +45,6 @@ First version.
 - In Schedule, slide sideways while dragging an event to change its time.
 - Jump to today always returns to today, and scrolls the grid to now.
 - New app icon: a calendar page with a crescent moon.
+- Day/3-day/week: drag an event's bottom edge to change its end; press, hold
+  and drag on empty time to create an event of that length.
+- Month: drag events to another day; "+N" opens a list of that day's events.

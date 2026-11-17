@@ -34,9 +34,12 @@ How Almanac covers the Google Calendar app, screen by screen.
   zoom, swipe for the next period, tap a free slot to add an event there, tap
   a day header to open that day. Press and hold an event and drag it to move
   it (15-minute steps, across days, the grid scrolls at the edges); holding
-  without moving opens the event menu.
-- **Month:** full month grid; an event spanning several days is one bar,
-  "+N" when a day is full; tap a day to open it, swipe between months.
+  without moving opens the event menu. Hold the small bar on an event's
+  bottom edge and drag to change when it ends. Press, hold and drag on
+  empty time to mark out a new event; letting go opens it in the editor.
+- **Month:** full month grid; an event spanning several days is one bar;
+  "+N" when a day is full opens a list of that day's events; press, hold and
+  drag an event to another day; tap a day to open it, swipe between months.
   Optional week numbers.
 
 ## Event details
