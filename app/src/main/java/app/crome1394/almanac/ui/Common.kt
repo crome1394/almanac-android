@@ -142,7 +142,8 @@ fun datesOf(i: Instance, from: LocalDate, to: LocalDate, zone: ZoneId = ZoneId.s
 
 /** An event block in Google's style: filled with the event color. */
 @Composable
-fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false, onLongClick: (() -> Unit)? = null,
+              gestures: Modifier? = null, onClick: () -> Unit) {
     val dark = isDark()
     val fill = eventFill(i.color, dark, past = i.dimmed())
     val text = onEventColor(Color(i.color))
@@ -154,7 +155,8 @@ fun EventChip(i: Instance, modifier: Modifier = Modifier, small: Boolean = false
                     .androidxBorder(fill, shape)
                 else Modifier.background(fill),
             )
-            .combinedClickable(onLongClick = onLongClick, onClick = onClick)
+            // [gestures] replaces the plain tap / long press when the chip can also be dragged.
+            .then(gestures ?: Modifier.combinedClickable(onLongClick = onLongClick, onClick = onClick))
             .padding(horizontal = if (small) 4.dp else 8.dp, vertical = if (small) 0.dp else 4.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
