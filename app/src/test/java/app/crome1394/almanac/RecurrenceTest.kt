@@ -61,9 +61,10 @@ class RecurrenceTest {
     }
 
     @Test fun presetsFollowTheStartDate() {
-        val lastMonday = LocalDate.of(2026, 11, 30)
+        val lastMonday = LocalDate.of(2026, 11, 30) // the fifth Monday: "last", never "fourth"
         val p = RRule.presets(lastMonday).map { it.format() }
-        assertTrue("FREQ=MONTHLY;BYDAY=4MO" in p)
+        assertFalse("FREQ=MONTHLY;BYDAY=4MO" in p)
+        assertTrue("FREQ=MONTHLY;BYDAY=4MO" in RRule.presets(LocalDate.of(2026, 11, 23)).map { it.format() })
         assertTrue("FREQ=MONTHLY;BYDAY=-1MO" in p)
         assertTrue("FREQ=WEEKLY;BYDAY=MO" in p)
         val mid = RRule.presets(LocalDate.of(2026, 11, 16)).map { it.format() }
@@ -100,5 +101,15 @@ class ExdateShiftTest {
         assertEquals("20261118", app.crome1394.almanac.data.shiftExdates("20261116", 2 * 86_400_000L))
         assertEquals("America/New_York;20261116T093000", app.crome1394.almanac.data.shiftExdates("America/New_York;20261116T093000", 3_600_000))
         assertNull(app.crome1394.almanac.data.shiftExdates(null, 5))
+    }
+}
+
+class ExdateListTest {
+    @Test fun readsAndWritesEntries() {
+        val ms = app.crome1394.almanac.data.exdateTimes("20261124T150000Z,20261201")
+        assertEquals(2, ms.size)
+        assertEquals("20261124T150000Z", app.crome1394.almanac.data.exdateEntry(ms[0], false))
+        assertEquals("20261201", app.crome1394.almanac.data.exdateEntry(ms[1], true))
+        assertTrue(app.crome1394.almanac.data.exdateTimes("TZID=Europe/Paris:20261124T150000").isEmpty())
     }
 }

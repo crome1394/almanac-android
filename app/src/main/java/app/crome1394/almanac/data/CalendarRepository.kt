@@ -312,28 +312,50 @@ class CalendarRepository(private val context: Context) {
      * Saves an edit of [d] (which was opened on the occurrence starting at [instanceBegin]).
      * For recurring events [scope] says which occurrences change, as in Google Calendar.
      */
-    suspend fun update(original: EventDetails, d: EventDraft, scope: Scope, instanceBegin: Long): Unit = io {
+    suspend fun update(original: EventDetails, d: EventDraft, scope: Scope, instanceBegin: Long): Unit =
+        io { applyUpdate(original, d, scope, instanceBegin, shiftFrom = instanceBegin) }
+
+    /**
+     * [instanceBegin] is the series occurrence being edited (where a split happens); [shiftFrom]
+     * is where it was shown before this edit, so a whole-series move is only what the user
+     * changed now (an earlier one-off move of that occurrence doesn't move the series).
+     */
+    private suspend fun applyUpdate(original: EventDetails, d: EventDraft, scope: Scope, instanceBegin: Long, shiftFrom: Long) {
+        if (d.calendarId != original.calendarId) {
+            // The store can't move an event between calendars (or accounts): copy, then remove.
+            require(!original.isRecurring && !original.isException) { "A repeating event can't be moved to another calendar" }
+            val newId = cr.insert(Events.CONTENT_URI, d.toValues(isNew = true))?.let(ContentUris::parseId)
+                ?: error("The calendar store refused the event")
+            writeChildren(newId, d, replace = false)
+            cr.delete(eventUri(original.id), null, null)
+            return
+        }
         when {
             original.isException && scope != Scope.THIS -> {
                 // A changed occurrence: "following" and "all" apply to the series it belongs to.
                 val master = event(original.originalId!!)
                 if (master == null) {
-                    saveInPlace(original.id, d)
+                    saveInPlace(original, d)
                 } else {
-                    update(master, d, scope, original.originalInstanceTime ?: instanceBegin)
+                    // The occurrence row has no repeat rule of its own; keep the series' rule.
+                    val draft = if (d.rrule.isNullOrBlank()) d.copy(rrule = master.rrule) else d
+                    applyUpdate(master, draft, scope, original.originalInstanceTime ?: instanceBegin, shiftFrom = original.dtStart)
                 }
             }
-            !original.isRecurring || original.isException -> saveInPlace(original.id, d)
+            !original.isRecurring || original.isException -> saveInPlace(original, d)
             scope == Scope.ALL || (scope == Scope.FOLLOWING && instanceBegin <= original.dtStart) -> {
                 // Move the whole series by however much this occurrence moved.
-                val shift = d.startMillis() - instanceBegin
+                val shift = d.startMillis() - shiftFrom
                 val draft = d.copy(seriesStartMillis = original.dtStart + shift)
-                val v = draft.toValues(isNew = false)
+                val v = draft.toValues(isNew = false).keepColorUnlessChanged(original, d)
                 if (!draft.rrule.isNullOrBlank()) {
                     // Keep the series' extra dates and left-out occurrences (see seriesValues).
                     v.put(Events.RDATE, original.rdate)
                     v.put(Events.EXDATE, shiftExdates(original.exdate, shift))
                 }
+                // Relink changed/cancelled occurrences first: the store expands the series when it
+                // is updated, matching exceptions as they are at that moment.
+                if (shift != 0L) shiftExceptions(original.id, shift)
                 cr.update(eventUri(original.id), v, null, null)
                 writeChildren(original.id, d, replace = true)
             }
@@ -363,17 +385,60 @@ class CalendarRepository(private val context: Context) {
                     newRule.copy(count = (oldRule.count - before).coerceAtLeast(1)).format()
                 } else d.rrule
                 val draft = d.copy(rrule = rule)
-                val newId = cr.insert(Events.CONTENT_URI, draft.toValues(isNew = true).apply {
-                    put(Events.CALENDAR_ID, original.calendarId)
-                })?.let(ContentUris::parseId) ?: error("The calendar store refused the change")
+                val v = draft.toValues(isNew = true).apply { put(Events.CALENDAR_ID, original.calendarId) }
+                if (!rule.isNullOrBlank()) {
+                    // The new half keeps the old one's left-out occurrences from the split on, and
+                    // leaves out the ones the old half still holds as changed occurrences (they
+                    // stay where they are), so nothing comes back and nothing shows twice.
+                    val shift = d.startMillis() - instanceBegin
+                    val left = exdateTimes(original.exdate).filter { it >= instanceBegin } +
+                        exceptionTimes(original.id).filter { it >= instanceBegin }
+                    if (left.isNotEmpty()) v.put(Events.EXDATE, left.distinct().sorted().joinToString(",") { exdateEntry(it + shift, d.allDay) })
+                    val extra = exdateTimes(original.rdate).filter { it >= instanceBegin }
+                    if (extra.isNotEmpty()) v.put(Events.RDATE, extra.joinToString(",") { exdateEntry(it + shift, d.allDay) })
+                }
+                val newId = cr.insert(Events.CONTENT_URI, v)?.let(ContentUris::parseId) ?: error("The calendar store refused the change")
                 writeChildren(newId, draft, replace = false)
             }
         }
     }
 
-    private fun saveInPlace(id: Long, d: EventDraft) {
-        cr.update(eventUri(id), d.toValues(isNew = false), null, null)
-        writeChildren(id, d, replace = true)
+    private fun saveInPlace(original: EventDetails, d: EventDraft) {
+        cr.update(eventUri(original.id), d.toValues(isNew = false).keepColorUnlessChanged(original, d), null, null)
+        writeChildren(original.id, d, replace = true)
+    }
+
+    /** Leaves the stored color alone when the editor didn't change it (it may have no key we know). */
+    private fun ContentValues.keepColorUnlessChanged(original: EventDetails, d: EventDraft): ContentValues = apply {
+        if (d.colorKey == original.colorKey?.takeIf { it.isNotBlank() }) { remove(Events.EVENT_COLOR_KEY); remove(Events.EVENT_COLOR) }
+    }
+
+    /** ORIGINAL_INSTANCE_TIME of a series' changed or cancelled occurrences. */
+    private fun exceptionTimes(masterId: Long): List<Long> =
+        cr.query(Events.CONTENT_URI, arrayOf(Events.ORIGINAL_INSTANCE_TIME), "${Events.ORIGINAL_ID}=? AND ${Events.DELETED}=0",
+            arrayOf(masterId.toString()), null)?.use { c ->
+            buildList { while (c.moveToNext()) if (!c.isNull(0)) add(c.getLong(0)) }
+        }.orEmpty()
+
+    /**
+     * After a whole series moved by [shift], its changed and cancelled occurrences must point at
+     * the moved occurrences, or the moved ones show next to them (and cancelled ones come back).
+     * The rows keep their own times; only the link moves.
+     */
+    private fun shiftExceptions(masterId: Long, shift: Long) {
+        cr.query(Events.CONTENT_URI, arrayOf(Events._ID, Events.ORIGINAL_INSTANCE_TIME, Events.DTSTART, Events.DURATION, Events.DTEND),
+            "${Events.ORIGINAL_ID}=? AND ${Events.DELETED}=0", arrayOf(masterId.toString()), null)?.use { c ->
+            while (c.moveToNext()) {
+                if (c.isNull(1)) continue
+                val v = ContentValues().apply {
+                    put(Events.ORIGINAL_INSTANCE_TIME, c.getLong(1) + shift)
+                    // The store re-expands from what is passed; send the row's own time unchanged.
+                    put(Events.DTSTART, c.getLong(2))
+                    if (!c.isNull(3)) put(Events.DURATION, c.getString(3)) else if (!c.isNull(4)) put(Events.DTEND, c.getLong(4))
+                }
+                cr.update(eventUri(c.getLong(0)), v, null, null)
+            }
+        }
     }
 
     suspend fun delete(original: EventDetails, scope: Scope, instanceBegin: Long): Unit = io {
@@ -425,10 +490,7 @@ class CalendarRepository(private val context: Context) {
      * is plain iCalendar, so sync adapters upload it as is.
      */
     private fun excludeOccurrence(original: EventDetails, instanceBegin: Long) {
-        val date = if (original.allDay) java.time.Instant.ofEpochMilli(instanceBegin).atZone(ZoneOffset.UTC)
-            .format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
-        else java.time.Instant.ofEpochMilli(instanceBegin).atZone(ZoneOffset.UTC)
-            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+        val date = exdateEntry(instanceBegin, original.allDay)
         val existing = original.exdate?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
         if (date in existing) return
         val v = seriesValues(original).apply { put(Events.EXDATE, (existing + date).joinToString(",")) }
@@ -632,6 +694,34 @@ data class EventDraft(
             val d = Duration.ofMillis(ms.coerceAtLeast(0))
             return if (allDay) "P${d.toDays().coerceAtLeast(1)}D" else "P${d.seconds}S"
         }
+    }
+}
+
+/** One EXDATE/RDATE entry: a UTC date-time, or a plain date for all-day series. */
+internal fun exdateEntry(ms: Long, allDay: Boolean): String {
+    val t = java.time.Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC)
+    // A plain date has no zone suffix (BASIC_ISO_DATE on a zoned time would add "Z").
+    return if (allDay) t.toLocalDate().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+    else t.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+}
+
+/**
+ * The times in an EXDATE/RDATE list we can read (UTC date-times and plain dates, as Almanac and
+ * DAVx5 write them); entries with a TZID or a period are skipped rather than guessed.
+ */
+internal fun exdateTimes(list: String?): List<Long> {
+    if (list.isNullOrBlank() || list.contains(';')) return emptyList()
+    val utc = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+    return list.split(',').map { it.trim() }.mapNotNull { e ->
+        runCatching {
+            when {
+                e.length == 16 && e.endsWith("Z") -> java.time.LocalDateTime.parse(e, utc).toInstant(ZoneOffset.UTC).toEpochMilli()
+                // "20261201Z" is how older Almanac builds wrote all-day dates.
+                e.length == 8 || (e.length == 9 && e.endsWith("Z")) ->
+                    LocalDate.parse(e.take(8), java.time.format.DateTimeFormatter.BASIC_ISO_DATE).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                else -> null
+            }
+        }.getOrNull()
     }
 }
 

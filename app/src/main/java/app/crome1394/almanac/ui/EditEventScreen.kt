@@ -193,7 +193,9 @@ private fun Editor(vm: AppViewModel, original: EventDetails?, initial: EventDraf
             HorizontalDivider()
 
             // Calendar
-            Row_(Icons.Outlined.CalendarToday, onClick = { if (writable.size > 1) dialog = "calendar" }, tag = "calendar") {
+            // A repeating event can't move to another calendar (the store has no way to move a series).
+            val canChangeCalendar = writable.size > 1 && (original == null || !(original.isRecurring || original.isException))
+            Row_(Icons.Outlined.CalendarToday, onClick = if (canChangeCalendar) ({ dialog = "calendar" }) else null, tag = "calendar") {
                 Column {
                     Text(cal?.name ?: "Calendar", style = MaterialTheme.typography.bodyLarge)
                     Text(if (cal?.isLocal == true) "On this phone only" else cal?.accountName.orEmpty(),
