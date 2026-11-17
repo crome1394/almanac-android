@@ -59,6 +59,21 @@ Editing or deleting one occurrence follows Google Calendar's three choices:
 | This event, synced series | An exception row via `Events.CONTENT_EXCEPTION_URI` (DTSTART + DURATION only; the store rejects other time columns) |
 | This event, unsynced series | The occurrence is added to the series' `EXDATE`; an edited occurrence becomes its own event |
 
+A few rules keep these from losing or doubling occurrences (each has a test in
+`RepositoryTest`):
+
+- Editing a changed occurrence (an exception row) for "following" or "all"
+  applies to its series with the series' own rule, and moves the series only by
+  what changed in this edit.
+- Moving a whole series moves its changed and cancelled occurrences' links
+  (`ORIGINAL_INSTANCE_TIME`) first, because the store matches exceptions when
+  it expands the series.
+- Splitting a series copies the left-out dates after the split into the new
+  half, and leaves out the dates the old half still holds as changed
+  occurrences.
+- An event changes calendar by being copied and deleted; repeating events
+  can't change calendar.
+
 The last row exists because of how AOSP's calendar store expands occurrences.
 It links exception rows to their series only through the series' `_sync_id`,
 and a series that has never synced has none. Phone-only calendars never sync,

@@ -28,6 +28,7 @@ to their server.** Data safety matters more than features:
 ```sh
 ./gradlew assembleDebug                 # app id app.crome1394.almanac.debug, named "Almanac (debug)"
 ./gradlew testDebugUnitTest             # unit tests (recurrence, layouts, .ics, birthdays, EXDATE, colors, themes, call links)
+ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest   # repeating-event edits against the real calendar store (emulator only)
 adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder
 adb -s emulator-5554 shell am broadcast -n app.crome1394.almanac.debug/app.crome1394.almanac.DemoSeeder --ez soon true
@@ -59,6 +60,10 @@ GPU host, start it with `-gpu swiftshader_indirect`.
   `drag-time`, `more-<column>`, `day-list`. The ⋮ button
   keeps the id `new-event`.
   Dialogs and menus are separate windows: find them by their text.
+- Any change to `CalendarRepository` writes: run the instrumented tests
+  (`RepositoryTest`) on an emulator, and add a case for the new path. They
+  make throwaway calendars (one under a made-up synced account) and delete
+  them afterwards.
 - Finish with unit tests passing, a clean build, and the change checked on an
   emulator (screenshots for anything visual, in light and dark).
 

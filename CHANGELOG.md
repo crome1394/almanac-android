@@ -51,3 +51,6 @@ First version.
 - Event card: Going? Yes / No / Maybe at the top for invitations, and a row of
   color circles to recolor the event in one tap.
 - Turning on All-day for an event under a day long keeps it to that one day.
+- Code review fixes: repeating-event edits that could drop or double
+  occurrences; a crash resizing late-night events; `.ics` files on Android
+  10–12; colors kept on unrelated edits; changing an event's calendar.
