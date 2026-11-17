@@ -495,7 +495,9 @@ internal fun duplicateDraft(vm: AppViewModel, e: EventDetails, begin: Long, end:
     return app.crome1394.almanac.data.EventDraft(
         calendarId = cal?.id ?: e.calendarId, title = e.title, allDay = e.allDay, start = s, end = en,
         zone = if (e.allDay) ZoneId.systemDefault() else evZone,
-        rrule = e.rrule, location = e.location, description = e.description, colorKey = e.colorKey,
+        rrule = e.rrule, location = e.location, description = e.description,
+        // A color key belongs to an account; it only carries over to the same calendar.
+        colorKey = e.colorKey?.takeIf { it.isNotBlank() && cal?.id == e.calendarId },
         availability = e.availability, accessLevel = e.accessLevel, reminders = e.reminders,
         attendees = e.attendees.filter { !it.isOrganizer }.map { it.copy(id = 0, status = Attendees.ATTENDEE_STATUS_NONE) },
         organizer = cal?.ownerAccount,

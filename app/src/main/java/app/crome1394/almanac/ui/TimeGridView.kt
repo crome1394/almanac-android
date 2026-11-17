@@ -229,7 +229,7 @@ private class GridDrag(val mode: DragMode, val i: Instance?, val dayIndex: Int, 
     private fun snap(m: Float) = Math.round(m / 15f) * 15
 
     /** A resize: the new length in minutes (15 minutes at least, not past midnight). */
-    fun newLength(hourPx: Float): Int = snap(lenMin + dy / hourPx * 60f).coerceIn(15, 1440 - startMin)
+    fun newLength(hourPx: Float): Int = snap(lenMin + dy / hourPx * 60f).coerceIn(15, (1440 - startMin).coerceAtLeast(15))
 
     /** A new event: start and end minute of the marked-out range (the slot itself at least). */
     fun range(hourPx: Float): Pair<Int, Int> {

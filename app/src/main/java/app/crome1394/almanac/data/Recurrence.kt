@@ -130,8 +130,9 @@ data class RRule(
             val list = mutableListOf(
                 RRule(Freq.DAILY),
                 RRule(Freq.WEEKLY, byDay = listOf(WeekdayNum(0, dow))),
-                RRule(Freq.MONTHLY, byDay = listOf(WeekdayNum(weekOfMonth(start).coerceAtMost(4), dow))),
             )
+            // A fifth weekday has no "nth" choice (most months have no fifth); it gets "last" below.
+            if (weekOfMonth(start) <= 4) list += RRule(Freq.MONTHLY, byDay = listOf(WeekdayNum(weekOfMonth(start), dow)))
             if (isLastWeekdayOfMonth(start)) list += RRule(Freq.MONTHLY, byDay = listOf(WeekdayNum(-1, dow)))
             list += RRule(Freq.YEARLY)
             list += RRule(Freq.WEEKLY, byDay = WEEKDAYS.map { WeekdayNum(0, it) })

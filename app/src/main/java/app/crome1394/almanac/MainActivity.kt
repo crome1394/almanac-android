@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
                 runCatching {
                     contentResolver.openInputStream(uri)?.use { s ->
                         // A calendar file is small; refuse anything huge rather than run out of memory.
-                        val bytes = s.readNBytes(MAX_ICS + 1)
+                        val bytes = readAtMost(s, MAX_ICS + 1)
                         if (bytes.size > MAX_ICS) null else Ics.parse(String(bytes, Charsets.UTF_8))
                     }
                 }.getOrNull()
@@ -136,4 +136,16 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object { private const val MAX_ICS = 5 * 1024 * 1024 }
+}
+
+/** Reads up to [max] bytes (InputStream.readNBytes needs Android 13; Almanac runs on 10). */
+private fun readAtMost(s: java.io.InputStream, max: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buf = ByteArray(8192)
+    while (out.size() < max) {
+        val n = s.read(buf, 0, minOf(buf.size, max - out.size()))
+        if (n < 0) break
+        out.write(buf, 0, n)
+    }
+    return out.toByteArray()
 }
